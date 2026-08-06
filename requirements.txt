@@ -25,3 +25,7 @@ typing-inspection==0.4.2
 typing_extensions==4.16.0
 urllib3==2.7.0
 websockets==17.0.1
+soundfile==0.13.1
+pydantic
+pydantic-settings
+python-dotenv
