@@ -16,7 +16,7 @@ class Settings(BaseSettings):
     )
 
     azure_openai_api_version: str = Field(
-        default="2025-04-01-preview",
+        default="2025-08-07",
         validation_alias="AZURE_OPENAI_API_VERSION"
     )
 
@@ -57,7 +57,7 @@ class Settings(BaseSettings):
 
 @lru_cache
 def get_settings() -> Settings:
-
+    
     return Settings()
 
 
