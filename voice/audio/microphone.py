@@ -34,7 +34,7 @@ class Microphone:
             logger.warning(f"Audio callback status: {status}")
 
         if self.loop is None:
-            return
+            return None
 
         audio_bytes = indata.copy().tobytes()
 
@@ -74,7 +74,7 @@ class Microphone:
     async def stop(self):
 
         if self.stream is None:
-            return
+            return None 
 
         logger.info("Stopping microphone...")
 

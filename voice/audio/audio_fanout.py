@@ -1,7 +1,5 @@
 import asyncio
 from config.logger import logger
-
-
 class AudioFanout:
 
     def __init__(
@@ -29,7 +27,7 @@ class AudioFanout:
 
     async def stop(self):
         if self._task is None:
-            return
+            return None
         self._task.cancel()
         try:
             await self._task
