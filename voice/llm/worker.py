@@ -3,9 +3,10 @@ import asyncio
 from config.logger import logger
 
 from voice.llm.azure import AzureLLM
-from voice.llm.events import TokenEvent
 from voice.llm.prompt_builder import PromptBuilder
+from voice.memory.history import ConversationHistory
 from voice.stt.events import TranscriptEvent
+from voice.text.splitter import SentenceSplitter
 
 
 class LLMWorker:
@@ -13,18 +14,19 @@ class LLMWorker:
     def __init__(
         self,
         llm: AzureLLM,
+        splitter: SentenceSplitter,
         transcript_queue: asyncio.Queue[TranscriptEvent],
-        token_queue: asyncio.Queue[TokenEvent],
     ):
 
         self.llm = llm
-
+        self.splitter = splitter
         self.transcript_queue = transcript_queue
-        self.token_queue = token_queue
+
+        self.history = ConversationHistory()
 
         self._task: asyncio.Task | None = None
 
-    async def run(self):
+    async def run(self) -> None:
 
         logger.info("Starting LLM Worker...")
 
@@ -37,20 +39,40 @@ class LLMWorker:
                 if not transcript.is_final:
                     continue
 
-                if not transcript.text.strip():
+                text = transcript.text.strip()
+
+                if not text:
                     continue
 
-                logger.info(
-                    f"User: {transcript.text}"
-                )
+                logger.info(f"User: {text}")
+
+                self.history.add_user(text)
 
                 messages = PromptBuilder.build(
-                    transcript.text
+                    self.history.messages()
                 )
+
+                assistant_response: list[str] = []
 
                 async for token in self.llm.stream(messages):
 
-                    await self.token_queue.put(token)
+                    assistant_response.append(token.text)
+
+                    await self.splitter.feed(
+                        token.text
+                    )
+
+                await self.splitter.flush()
+
+                assistant_text = "".join(
+                    assistant_response
+                ).strip()
+
+                if assistant_text:
+
+                    self.history.add_assistant(
+                        assistant_text
+                    )
 
         except asyncio.CancelledError:
 
@@ -64,7 +86,7 @@ class LLMWorker:
 
             raise
 
-    def start(self):
+    def start(self) -> None:
 
         if self._task is not None:
             raise RuntimeError(
@@ -75,10 +97,10 @@ class LLMWorker:
             self.run()
         )
 
-    async def stop(self):
+    async def stop(self) -> None:
 
         if self._task is None:
-            return
+            return None
 
         self._task.cancel()
 

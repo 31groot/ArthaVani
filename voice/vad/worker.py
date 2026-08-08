@@ -34,7 +34,6 @@ class VADWorker:
     async def run(self):
 
         logger.info("Starting VAD Worker...")
-
         try:
 
             while True:

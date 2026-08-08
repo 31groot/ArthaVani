@@ -17,9 +17,7 @@ class SileroVAD:
         audio_bytes: bytes,
         threshold: float = 0.5,
     ) -> bool:
-
-
-
+        
         audio = np.frombuffer(audio_bytes, dtype=np.int16)
         audio = audio.astype(np.float32) / 32768.0
         audio_tensor = torch.from_numpy(audio)

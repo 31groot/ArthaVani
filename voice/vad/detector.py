@@ -22,7 +22,7 @@ class SpeechDetector:
         self._silence_frames = 0
         self._speaking = False
 
-    def update(self,probability,) -> ConversationEvent | None:
+    def update(self, probability,) -> ConversationEvent | None:
         if probability >= self.threshold:
             self._speech_frames += 1
             self._silence_frames = 0

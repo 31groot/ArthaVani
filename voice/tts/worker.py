@@ -3,7 +3,6 @@ from __future__ import annotations
 import asyncio
 
 from config.logger import logger
-
 from voice.text.events import SentenceEvent
 from voice.tts.elevenlabs import ElevenLabsTTS
 
