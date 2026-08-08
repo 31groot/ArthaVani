@@ -1,0 +1,239 @@
+[1mdiff --git a/voice/audio/speaker.py b/voice/audio/speaker.py[m
+[1mindex e69de29..f1a69eb 100644[m
+[1m--- a/voice/audio/speaker.py[m
+[1m+++ b/voice/audio/speaker.py[m
+[36m@@ -0,0 +1,242 @@[m
+[32m+[m[32mimport asyncio[m
+[32m+[m[32mimport queue[m
+[32m+[m[32mimport threading[m
+[32m+[m
+[32m+[m[32mimport numpy as np[m
+[32m+[m[32mimport sounddevice as sd[m
+[32m+[m
+[32m+[m[32mfrom config.constants import ([m
+[32m+[m[32m    CHANNELS,[m
+[32m+[m[32m    CHUNK_SIZE,[m
+[32m+[m[32m    MAX_QUEUE_SIZE,[m
+[32m+[m[32m    SAMPLE_RATE,[m
+[32m+[m[32m)[m
+[32m+[m[32mfrom config.logger import logger[m
+[32m+[m
+[32m+[m
+[32m+[m[32mclass Speaker:[m
+[32m+[m
+[32m+[m[32m    def __init__([m
+[32m+[m[32m        self,[m
+[32m+[m[32m        audio_queue: asyncio.Queue[bytes],[m
+[32m+[m[32m    ):[m
+[32m+[m[32m        self.audio_queue = audio_queue[m
+[32m+[m
+[32m+[m[32m        self.stream: sd.OutputStream | None = Non[m
+[32m+[m
+[32m+[m[32m        self._playback_queue: queue.Queue[bytes] = queue.Queue([m
+[32m+[m[32m            maxsize=MAX_QUEUE_SIZE[m
+[32m+[m[32m        )[m
+[32m+[m[32m        self._buffer = bytearray()[m
+[32m+[m
+[32m+[m[32m        self._buffer_lock = threading.Lock()[m
+[32m+[m
+[32m+[m[32m        self._task: asyncio.Task | None = None[m
+[32m+[m
+[32m+[m[32m    async def start(self) -> None:[m
+[32m+[m
+[32m+[m[32m        if self.stream is not None:[m
+[32m+[m[32m            raise RuntimeError("Speaker already started.")[m
+[32m+[m
+[32m+[m[32m        logger.info("Opening speaker...")[m
+[32m+[m
+[32m+[m[32m        self.stream = sd.OutputStream([m
+[32m+[m[32m            samplerate=SAMPLE_RATE,[m
+[32m+[m[32m            channels=CHANNELS,[m
+[32m+[m[32m            dtype="int16",[m
+[32m+[m[32m            blocksize=CHUNK_SIZE,[m
+[32m+[m[32m            callback=self._audio_callback,[m
+[32m+[m[32m        )[m
+[32m+[m
+[32m+[m[32m        self.stream.start()[m
+[32m+[m
+[32m+[m[32m        self._task = asyncio.create_task([m
+[32m+[m[32m            self._audio_bridge()[m
+[32m+[m[32m        )[m
+[32m+[m
+[32m+[m[32m        logger.info("Speaker started.")[m
+[32m+[m
+[32m+[m[32m    async def _audio_bridge(self) -> None:[m
+[32m+[m
+[32m+[m[32m        try:[m
+[32m+[m
+[32m+[m[32m            while True:[m
+[32m+[m
+[32m+[m[32m                audio = await self.audio_queue.get()[m
+[32m+[m
+[32m+[m[32m                loop = asyncio.get_running_loop()[m
+[32m+[m
+[32m+[m[32m                await loop.run_in_executor([m
+[32m+[m[32m                    None,[m
+[32m+[m[32m                    self._playback_queue.put,[m
+[32m+[m[32m                    audio,[m
+[32m+[m[32m                )[m
+[32m+[m
+[32m+[m[32m        except asyncio.CancelledError:[m
+[32m+[m
+[32m+[m[32m            raise[m
+[32m+[m
+[32m+[m[32m    def _audio_callback([m
+[32m+[m[32m        self,[m
+[32m+[m[32m        outdata,[m
+[32m+[m[32m        frames,[m
+[32m+[m[32m        time,[m
+[32m+[m[32m        status,[m
+[32m+[m[32m    ) -> None:[m
+[32m+[m
+[32m+[m[32m        if status:[m
+[32m+[m[32m            logger.warning([m
+[32m+[m[32m                f"Speaker callback status: {status}"[m
+[32m+[m[32m            )[m
+[32m+[m
+[32m+[m[32m        bytes_per_sample = np.dtype([m
+[32m+[m[32m            np.int16[m
+[32m+[m[32m        ).itemsize[m
+[32m+[m
+[32m+[m[32m        required_bytes = ([m
+[32m+[m[32m            frames[m
+[32m+[m[32m            * CHANNELS[m
+[32m+[m[32m            * bytes_per_sample[m
+[32m+[m[32m        )[m
+[32m+[m
+[32m+[m[32m        with self._buffer_lock:[m
+[32m+[m
+[32m+[m[32m            while len(self._buffer) < required_bytes:[m
+[32m+[m
+[32m+[m[32m                try:[m
+[32m+[m
+[32m+[m[32m                    audio = self._playback_queue.get_nowait()[m
+[32m+[m
+[32m+[m[32m                except queue.Empty:[m
+[32m+[m
+[32m+[m[32m                    break[m
+[32m+[m
+[32m+[m[32m                self._buffer.extend(audio)[m
+[32m+[m
+[32m+[m[32m            if len(self._buffer) >= required_bytes:[m
+[32m+[m
+[32m+[m[32m                chunk = self._buffer[:required_bytes][m
+[32m+[m
+[32m+[m[32m                del self._buffer[:required_bytes][m
+[32m+[m
+[32m+[m[32m                audio_array = np.frombuffer([m
+[32m+[m[32m                    chunk,[m
+[32m+[m[32m                    dtype=np.int16,[m
+[32m+[m[32m                )[m
+[32m+[m
+[32m+[m[32m                audio_array = audio_array.reshape([m
+[32m+[m[32m                    frames,[m
+[32m+[m[32m                    CHANNELS,[m
+[32m+[m[32m                )[m
+[32m+[m
+[32m+[m[32m                outdata[:] = audio_array[m
+[32m+[m
+[32m+[m[32m                return[m
+[32m+[m
+[32m+[m[32m            outdata.fill(0)[m
+[32m+[m
+[32m+[m[32m            if not self._buffer:[m
+[32m+[m[32m                return[m
+[32m+[m
+[32m+[m[32m            available_bytes = len(self._buffer)[m
+[32m+[m
+[32m+[m[32m            available_samples = ([m
+[32m+[m[32m                available_bytes[m
+[32m+[m[32m                // bytes_per_sample[m
+[32m+[m[32m            )[m
+[32m+[m
+[32m+[m[32m            available_frames = ([m
+[32m+[m[32m                available_samples[m
+[32m+[m[32m                // CHANNELS[m
+[32m+[m[32m            )[m
+[32m+[m
+[32m+[m[32m            if available_frames <= 0:[m
+[32m+[m[32m                return[m
+[32m+[m
+[32m+[m[32m            chunk_bytes = ([m
+[32m+[m[32m                available_frames[m
+[32m+[m[32m                * CHANNELS[m
+[32m+[m[32m                * bytes_per_sample[m
+[32m+[m[32m            )[m
+[32m+[m
+[32m+[m[32m            chunk = self._buffer[:chunk_bytes][m
+[32m+[m
+[32m+[m[32m            del self._buffer[:chunk_bytes][m
+[32m+[m
+[32m+[m[32m            audio_array = np.frombuffer([m
+[32m+[m[32m                chunk,[m
+[32m+[m[32m                dtype=np.int16,[m
+[32m+[m[32m            )[m
+[32m+[m
+[32m+[m[32m            audio_array = audio_array.reshape([m
+[32m+[m[32m                available_frames,[m
+[32m+[m[32m                CHANNELS,[m
+[32m+[m[32m            )[m
+[32m+[m
+[32m+[m[32m            outdata[:available_frames] = audio_array[m
+[32m+[m
+[32m+[m[32m    async def clear(self) -> None:[m
+[32m+[m
+[32m+[m[32m        with self._buffer_lock:[m
+[32m+[m[32m            self._buffer.clear()[m
+[32m+[m
+[32m+[m[32m        while True:[m
+[32m+[m
+[32m+[m[32m            try:[m
+[32m+[m
+[32m+[m[32m                self._playback_queue.get_nowait()[m
+[32m+[m
+[32m+[m[32m            except queue.Empty:[m
+[32m+[m
+[32m+[m[32m                break[m
+[32m+[m
+[32m+[m[32m        while True:[m
+[32m+[m
+[32m+[m[32m            try:[m
+[32m+[m
+[32m+[m[32m                self.audio_queue.get_nowait()[m
+[32m+[m
+[32m+[m[32m            except asyncio.QueueEmpty:[m
+[32m+[m
+[32m+[m[32m                break[m
+[32m+[m
+[32m+[m[32m    async def stop(self) -> None:[m
+[32m+[m
+[32m+[m[32m        if self.stream is None:[m
+[32m+[m[32m            return[m
+[32m+[m
+[32m+[m[32m        logger.info("Stopping speaker...")[m
+[32m+[m
+[32m+[m[32m        if self._task is not None:[m
+[32m+[m
+[32m+[m[32m            self._task.cancel()[m
+[32m+[m
+[32m+[m[32m            try:[m
+[32m+[m
+[32m+[m[32m                await self._task[m
+[32m+[m
+[32m+[m[32m            except asyncio.CancelledError:[m
+[32m+[m
+[32m+[m[32m                pass[m
+[32m+[m
+[32m+[m[32m            self._task = None[m
+[32m+[m
+[32m+[m[32m        self.stream.stop()[m
+[32m+[m[32m        self.stream.close()[m
+[32m+[m
+[32m+[m[32m        self.stream = None[m
+[32m+[m
+[32m+[m[32m        with self._buffer_lock:[m
+[32m+[m[32m            self._buffer.clear()[m
+[32m+[m
+[32m+[m[32m        while True:[m
+[32m+[m
+[32m+[m[32m      
