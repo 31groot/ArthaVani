@@ -20,7 +20,7 @@ class ElevenLabsTTS:
     ) -> AsyncGenerator[bytes, None]:
 
         if not text.strip():
-            return None
+            return
 
         logger.info("Starting ElevenLabs TTS stream.")
 
