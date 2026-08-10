@@ -1,5 +1,4 @@
 import asyncio
-
 import sounddevice as sd
 
 from config.constants import (
@@ -10,9 +9,7 @@ from config.constants import (
 )
 from config.logger import logger
 
-
 class Microphone:
-
 
     def __init__(self):
 
@@ -25,8 +22,6 @@ class Microphone:
     def _audio_callback(
         self,
         indata,
-        frames,
-        time,
         status,
     ):
 
@@ -37,22 +32,21 @@ class Microphone:
             return None
 
         audio_bytes = indata.copy().tobytes()
-
-        def _enqueue_audio(self, audio_bytes: bytes):
-            try:
-                self.audio_queue.put_nowait(audio_bytes)
-            except asyncio.QueueFull:
-                logger.warning("Audio queue full. Dropping audio chunk.")
-
+        
         self.loop.call_soon_threadsafe(
             self._enqueue_audio,
             audio_bytes,
         )
 
+    def _enqueue_audio(self, audio_bytes: bytes):
+        try:
+            self.audio_queue.put_nowait(audio_bytes)
+        except asyncio.QueueFull:
+            logger.warning("Audio queue full. Dropping audio chunk.")
+
+
     async def start(self):
-
         logger.info("Opening microphone...")
-
         self.loop = asyncio.get_running_loop()
 
         self.stream = sd.InputStream(
