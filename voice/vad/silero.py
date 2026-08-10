@@ -1,4 +1,3 @@
-```python
 import numpy as np
 import torch
 from silero_vad import load_silero_vad
@@ -34,4 +33,3 @@ class SileroVAD:
 
         # Return True if the probability is above the speech threshold
         return speech_prob > threshold
-```
