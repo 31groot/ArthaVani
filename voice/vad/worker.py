@@ -1,6 +1,5 @@
 import asyncio
 
-from config.constants import VAD_FRAME_SAMPLES
 from config.logger import logger
 
 from voice.vad.buffer import AudioBuffer
@@ -23,19 +22,20 @@ class VADWorker:
         self.detector = detector
 
         self.audio_queue = audio_queue
+
         self.conversation_queue = conversation_queue
 
-        self.buffer = AudioBuffer(
-            frame_samples=VAD_FRAME_SAMPLES,
-        )
+        self.buffer = AudioBuffer()
 
         self._task: asyncio.Task | None = None
 
     async def run(self):
 
         logger.info("Starting VAD Worker...")
+
         try:
 
+            # Keep processing audio until the worker is cancelled
             while True:
 
                 chunk = await self.audio_queue.get()
@@ -46,17 +46,16 @@ class VADWorker:
 
                 for frame in frames:
 
-                    probability = self.vad.predict(frame)
+                    probability = self.vad.is_speech(frame)
+
                     event = self.detector.update(probability)
 
                     if event is not None:
-
                         await self.conversation_queue.put(event)
 
         except asyncio.CancelledError:
 
             logger.info("VAD Worker stopped.")
-
             raise
 
     def start(self):
@@ -75,16 +74,22 @@ class VADWorker:
         if self._task is None:
             return None
 
+        # Request cancellation of the background task
         self._task.cancel()
 
         try:
+            # Wait until the worker has actually stopped
             await self._task
 
         except asyncio.CancelledError:
+            # Cancellation was expected, so ignore it here
             pass
 
+        # Remove any audio left in the buffer
         self.buffer.clear()
 
+        # Mark the worker as stopped
         self._task = None
 
         logger.info("VAD Worker stopped.")
+
