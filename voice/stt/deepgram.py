@@ -10,40 +10,65 @@ from config.settings import settings
 
 from voice.stt.events import TranscriptEvent
 
+
 class DeepgramClient:
 
     def __init__(self):
+
         self.client = AsyncDeepgramClient(
-            api_key=settings.deepgram.api_key,
+            api_key=settings.deepgram_api_key,
         )
+
+        # Will hold the active Deepgram connection after connect()
         self.connection = None
+
         self.loop: asyncio.AbstractEventLoop | None = None
+
         self._events: asyncio.Queue[TranscriptEvent] = asyncio.Queue()
 
-    async def connect(self):
+        # Keep the connection context alive until close() is called
+        self._connection_context = None
+
+        self._listen_task: asyncio.Task | None = None
+
+    async def connect(self) -> None:
+
         logger.info("Connecting to Deepgram...")
 
         self.loop = asyncio.get_running_loop()
 
-        self.connection = await self.client.listen.v2.connect(
-            model=settings.deepgram.model,
-            encoding="linear16",
-            sample_rate=SAMPLE_RATE,
+        self._connection_context = (
+            self.client.listen.v2.connect(
+                model=settings.deepgram_model,
+                encoding="linear16",
+                sample_rate=SAMPLE_RATE,
+            )
+        )
+
+        # Enter the connection context and get the active connection
+        self.connection = (
+            await self._connection_context.__aenter__()
         )
 
         self.connection.on(
             EventType.OPEN,
-            lambda _: logger.info("Deepgram connection opened."),
+            lambda _: logger.info(
+                "Deepgram connection opened."
+            ),
         )
 
         self.connection.on(
             EventType.CLOSE,
-            lambda _: logger.info("Deepgram connection closed."),
+            lambda _: logger.info(
+                "Deepgram connection closed."
+            ),
         )
 
         self.connection.on(
             EventType.ERROR,
-            lambda error: logger.error(f"Deepgram error: {error}"),
+            lambda error: logger.error(
+                f"Deepgram error: {error}"
+            ),
         )
 
         self.connection.on(
@@ -51,42 +76,96 @@ class DeepgramClient:
             self._on_message,
         )
 
-        await self.connection.start_listening()
+        self._listen_task = asyncio.create_task(
+            self.connection.start_listening()
+        )
+
         logger.info("Deepgram connected.")
 
-    async def send_audio(self, audio: bytes):
-        if self.connection is None:
-            raise RuntimeError("Deepgram client is not connected.")
-        await self.connection.send_media(audio)
+    async def send_audio(
+        self,
+        audio: bytes,
+    ) -> None:
 
-    async def receive(self) -> TranscriptEvent:
+        if self.connection is None:
+            raise RuntimeError(
+                "Deepgram client is not connected."
+            )
+
+        await self.connection.send_media(
+            audio
+        )
+
+    async def receive(
+        self,
+    ) -> TranscriptEvent:
+
         return await self._events.get()
 
-    async def close(self):
-        if self.connection is None:
-            return None
+    async def close(self) -> None:
 
-        await self.connection.send_close_stream()
-        logger.info("Deepgram connection teardown initiated.")
+        logger.info("Closing Deepgram connection...")
 
-    def _on_message(self, message):
+        if self._listen_task is not None:
 
+            self._listen_task.cancel()
+
+            try:
+                await self._listen_task
+
+            except asyncio.CancelledError:
+                pass
+
+            self._listen_task = None
+
+        if self._connection_context is not None:
+
+            try:
+
+                await self._connection_context.__aexit__(
+                    None,
+                    None,
+                    None,
+                )
+
+            finally:
+
+                self._connection_context = None
+                self.connection = None
+
+        logger.info("Deepgram connection closed.")
+
+    def _on_message(self, message) -> None:
+
+        # Ignore messages that are not transcription results
         if not isinstance(message, ListenV2TurnInfo):
-            return None
+            return
 
+        # Ignore messages without any transcription alternatives
+        if not message.channel.alternatives:
+            return
+
+        # Use the first transcription alternative
         alternative = message.channel.alternatives[0]
         transcript = alternative.transcript
 
+        # Ignore empty transcription results
         if not transcript:
-            return None
+            return
 
+        # Convert Deepgram's response into our application's event
         event = TranscriptEvent(
             text=transcript,
-            confidence=getattr(alternative, "confidence", 0.0),
+            confidence=getattr(
+                alternative,
+                "confidence",
+                0.0,
+            ),
             is_final=message.is_final,
         )
 
-        if self.loop and self.loop.is_running():
+        # Safely put the event into the asyncio queue
+        if self.loop is not None and self.loop.is_running():
             self.loop.call_soon_threadsafe(
                 self._events.put_nowait,
                 event,
