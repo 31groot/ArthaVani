@@ -1,5 +1,3 @@
-from collections.abc import AsyncGenerator
-
 from openai import AsyncAzureOpenAI
 
 from config.logger import logger
@@ -9,15 +7,16 @@ class AzureLLM:
 
     def __init__(self):
         self.client = AsyncAzureOpenAI(
-            api_key=settings.azure.api_key,
-            api_version=settings.azure.api_version,
-            azure_endpoint=settings.azure.endpoint,
+            api_key=settings.AZURE_OPENAI_API_KEY,
+            api_version=settings.AZURE_OPENAI_API_VERSION,
+            azure_endpoint=settings.AZURE_OPENAI_ENDPOINT,
         )
+
 
     async def stream(
         self,
         messages: list[dict[str, str]],
-    ) -> AsyncGenerator[TokenEvent, None]:
+    ):
 
         if not messages:
             raise ValueError("messages cannot be empty.")
@@ -26,7 +25,7 @@ class AzureLLM:
 
         try:
             stream = await self.client.chat.completions.create(
-                model=settings.azure.deployment,
+                model=settings.AZURE_OPENAI_DEPLOYMENT,
                 messages=messages,
                 stream=True,
             )
