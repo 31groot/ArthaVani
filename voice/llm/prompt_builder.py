@@ -1,3 +1,5 @@
+from voice.llm.events import ChatMessage
+
 SYSTEM_PROMPT = """
 You are ArthaVani, a real-time AI voice assistant.
 
@@ -7,10 +9,8 @@ Guidelines:
 - Avoid unnecessary formatting.
 - Answer conversationally.
 - If you don't know something, say so.
-""".strip()
-
+"""
 class PromptBuilder:
-
     @staticmethod
     def build(
         history: list[ChatMessage],

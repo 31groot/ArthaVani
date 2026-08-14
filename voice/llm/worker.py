@@ -6,7 +6,7 @@ from voice.llm.azure import AzureLLM
 from voice.llm.prompt_builder import PromptBuilder
 from voice.memory.history import ConversationHistory
 from voice.stt.events import TranscriptEvent
-from voice.text.splitter import SentenceSplitter
+from voice.text.text_splitter import SentenceSplitter
 
 
 class LLMWorker:
