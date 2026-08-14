@@ -1,35 +1,34 @@
+import asyncio
 import numpy as np
 import torch
 from silero_vad import load_silero_vad
 
-from config.constants import SAMPLE_RATE, SPEECH_THRESHOLD
+from config.constants import SAMPLE_RATE
 from config.logger import logger
 
 
 class SileroVAD:
-
     def __init__(self):
         logger.info("Loading Silero VAD model...")
+        torch.set_num_threads(1)
         self.model = load_silero_vad()
         logger.info("Silero VAD loaded.")
 
-    def is_speech(
-        self,
-        audio_bytes: bytes,
-        threshold: float = SPEECH_THRESHOLD,
-    ) -> bool:
-
-        # Convert raw audio bytes into int16 audio samples
+    def _infer(self, audio_bytes: bytes,) -> float:
         audio = np.frombuffer(audio_bytes, dtype=np.int16)
-
-        # Normalize int16 audio
         audio = audio.astype(np.float32) / 32768.0
-
-        # Convert the NumPy array into a PyTorch tensor for Silero
         audio_tensor = torch.from_numpy(audio)
-
-        # Run the VAD model and get the speech probability
         speech_prob = self.model(audio_tensor, SAMPLE_RATE).item()
+        return speech_prob
 
-        # Return True if the probability is above the speech threshold
-        return speech_prob > threshold
+
+    async def is_speech(self, audio_bytes: bytes) -> float:
+        loop = asyncio.get_running_loop()
+
+        # Run the CPU-heavy model inference in a background thread
+        # so it does not block the asyncio event loop.
+        return await loop.run_in_executor(
+            None,  # Use Python's default thread pool.
+            self._infer,  # Function to execute in the background.
+            audio_bytes,  # Audio data passed to _infer().
+        )

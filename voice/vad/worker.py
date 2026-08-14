@@ -35,7 +35,6 @@ class VADWorker:
 
         try:
 
-            # Keep processing audio until the worker is cancelled
             while True:
 
                 chunk = await self.audio_queue.get()
@@ -46,7 +45,7 @@ class VADWorker:
 
                 for frame in frames:
 
-                    probability = self.vad.is_speech(frame)
+                    probability = await self.vad.is_speech(frame)
 
                     event = self.detector.update(probability)
 
@@ -56,6 +55,11 @@ class VADWorker:
         except asyncio.CancelledError:
 
             logger.info("VAD Worker stopped.")
+            raise
+
+        except Exception:
+
+            logger.exception("VAD Worker crashed.")
             raise
 
     def start(self):
