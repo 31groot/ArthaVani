@@ -22,7 +22,7 @@ class Speaker:
     ):
         self.audio_queue = audio_queue
 
-        self.stream: sd.OutputStream | None = Non
+        self.stream: sd.OutputStream | None = None
 
         self._playback_queue: queue.Queue[bytes] = queue.Queue(
             maxsize=MAX_QUEUE_SIZE
@@ -84,7 +84,7 @@ class Speaker:
         status,
     ) -> None:
 
-        if status:
+        if status and not status.output_underflow:
             logger.warning(
                 f"Speaker callback status: {status}"
             )

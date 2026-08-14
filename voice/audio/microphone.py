@@ -61,9 +61,6 @@ class Microphone:
 
         logger.info("Microphone started.")
 
-    async def read(self) -> bytes:
-
-        return await self.audio_queue.get()
 
     async def stop(self):
 
