@@ -16,7 +16,7 @@ class DeepgramClient:
     def __init__(self):
 
         self.client = AsyncDeepgramClient(
-            api_key=settings.deepgram_api_key,
+            api_key=settings.DEEPGRAM_API_KEY,
         )
 
         # Will hold the active Deepgram connection after connect()
@@ -39,7 +39,7 @@ class DeepgramClient:
 
         self._connection_context = (
             self.client.listen.v2.connect(
-                model=settings.deepgram_model,
+                model=settings.DEEPGRAM_MODEL,
                 encoding="linear16",
                 sample_rate=SAMPLE_RATE,
             )
