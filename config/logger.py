@@ -6,13 +6,13 @@ from config.settings import settings
 
 def setup_logger() -> logging.Logger:
 
-
     logger = logging.getLogger("arthavani")
 
+    # avoid duplication 
     if logger.hasHandlers():
         return logger
 
-    logger.setLevel(settings.log_level.upper())
+    logger.setLevel(settings.LOG_LEVEL)
 
     console_handler = logging.StreamHandler(sys.stdout)
 
@@ -25,9 +25,6 @@ def setup_logger() -> logging.Logger:
 
     logger.addHandler(console_handler)
 
-    logger.propagate = False
-
     return logger
-
 
 logger = setup_logger()

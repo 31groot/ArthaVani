@@ -23,6 +23,7 @@ MIN_SILENCE_DURATION_MS = 500
 # Threshold for speech detection
 SPEECH_THRESHOLD = 0.5
 
+FRAME_DURATION_MS = 32
 
 STT_TIMEOUT = 30
 
@@ -33,6 +34,10 @@ TTS_TIMEOUT = 30
 
 
 MAX_QUEUE_SIZE = 100
+
+#maximum messages for history queue
+MAX_MESSAGES =  20
+
 
 
 
