@@ -13,7 +13,7 @@ from voice.llm.worker import LLMWorker
 from voice.stt.deepgram import DeepgramClient
 from voice.stt.worker import STTWorker
 
-from voice.text.splitter import SentenceSplitter
+from voice.text.text_splitter import SentenceSplitter
 
 from voice.tts.elevenlabs import ElevenLabsTTS
 from voice.tts.worker import TTSWorker
@@ -28,52 +28,50 @@ class VoicePipeline:
 
     def __init__(self):
 
-        self.audio_input_queue: asyncio.Queue[bytes] = (
-            asyncio.Queue(
-                maxsize=MAX_QUEUE_SIZE
-            )
+        # Queue receiving raw audio from the microphone.
+        self.audio_input_queue: asyncio.Queue[bytes] = asyncio.Queue(
+            maxsize=MAX_QUEUE_SIZE
         )
 
-        self.vad_queue: asyncio.Queue[bytes] = (
-            asyncio.Queue(
-                maxsize=MAX_QUEUE_SIZE
-            )
+        # Separate queue for the VAD branch.
+        self.vad_queue: asyncio.Queue[bytes] = asyncio.Queue(
+            maxsize=MAX_QUEUE_SIZE
         )
 
-        self.stt_audio_queue: asyncio.Queue[bytes] = (
-            asyncio.Queue(
-                maxsize=MAX_QUEUE_SIZE
-            )
+        # Separate queue for the STT branch.
+        self.stt_audio_queue: asyncio.Queue[bytes] = asyncio.Queue(
+            maxsize=MAX_QUEUE_SIZE
         )
 
+        # VAD sends speech STARTED/ENDED events here.
         self.conversation_queue: asyncio.Queue[
             ConversationEvent
         ] = asyncio.Queue()
 
-
+        # STT sends transcript events here for the LLM worker.
         self.transcript_queue = asyncio.Queue(
             maxsize=MAX_QUEUE_SIZE
         )
 
-
+        # LLM sends complete sentences here for the TTS worker.
         self.sentence_queue = asyncio.Queue(
             maxsize=MAX_QUEUE_SIZE
         )
 
-
-        self.speaker_audio_queue: asyncio.Queue[bytes] = (
-            asyncio.Queue(
-                maxsize=MAX_QUEUE_SIZE
-            )
+        # TTS sends generated audio here for the speaker.
+        self.speaker_audio_queue: asyncio.Queue[bytes] = asyncio.Queue(
+            maxsize=MAX_QUEUE_SIZE
         )
 
+        # Hardware / input-output components.
         self.microphone = Microphone()
 
         self.speaker = Speaker(
             audio_queue=self.speaker_audio_queue,
         )
 
-
+        # Takes microphone audio and sends the same audio
+        # to both VAD and STT.
         self.audio_fanout = AudioFanout(
             input_queue=self.audio_input_queue,
             output_queues=[
@@ -82,9 +80,8 @@ class VoicePipeline:
             ],
         )
 
-
+        # VAD components.
         self.silero_vad = SileroVAD()
-
         self.speech_detector = SpeechDetector()
 
         self.vad_worker = VADWorker(
@@ -94,6 +91,7 @@ class VoicePipeline:
             conversation_queue=self.conversation_queue,
         )
 
+        # Speech-to-text components.
         self.deepgram = DeepgramClient()
 
         self.stt_worker = STTWorker(
@@ -102,7 +100,7 @@ class VoicePipeline:
             transcript_queue=self.transcript_queue,
         )
 
-
+        # LLM components.
         self.azure_llm = AzureLLM()
 
         self.sentence_splitter = SentenceSplitter(
@@ -115,7 +113,7 @@ class VoicePipeline:
             transcript_queue=self.transcript_queue,
         )
 
-
+        # Text-to-speech components.
         self.elevenlabs = ElevenLabsTTS()
 
         self.tts_worker = TTSWorker(
@@ -124,11 +122,12 @@ class VoicePipeline:
             audio_queue=self.speaker_audio_queue,
         )
 
-
+        # Stores the main pipeline task.
         self._run_task: asyncio.Task | None = None
 
     async def start(self) -> None:
 
+        # Prevent starting the same pipeline twice.
         if self._run_task is not None:
             raise RuntimeError(
                 "Voice Pipeline already started."
@@ -136,19 +135,21 @@ class VoicePipeline:
 
         logger.info("Starting Voice Pipeline...")
 
-
+        # Start hardware.
         await self.microphone.start()
         await self.speaker.start()
 
-
+        # Start the audio distribution system.
         self.audio_fanout.start()
 
-
+        # Start all processing workers.
         self.vad_worker.start()
         self.stt_worker.start()
         self.llm_worker.start()
         self.tts_worker.start()
 
+        # Start the main loop that moves microphone audio
+        # into the pipeline.
         self._run_task = asyncio.create_task(
             self.run()
         )
@@ -156,7 +157,6 @@ class VoicePipeline:
         logger.info("Voice Pipeline started.")
 
     async def run(self) -> None:
-
 
         logger.info(
             "Voice Pipeline audio loop started."
@@ -166,8 +166,11 @@ class VoicePipeline:
 
             while True:
 
+                # Wait for the next audio chunk from the microphone.
                 audio = await self.microphone.read()
 
+                # Put the audio into the main queue.
+                # AudioFanout will later distribute it to VAD and STT.
                 await self.audio_input_queue.put(
                     audio
                 )
@@ -178,10 +181,12 @@ class VoicePipeline:
                 "Voice Pipeline audio loop stopped."
             )
 
+            # Allow cancellation to propagate correctly.
             raise
 
         except Exception:
 
+            # Log unexpected errors before propagating them.
             logger.exception(
                 "Voice Pipeline audio loop crashed."
             )
@@ -189,16 +194,15 @@ class VoicePipeline:
             raise
 
     async def stop(self) -> None:
-        """
-        Stop the complete voice pipeline.
-        """
 
         logger.info("Stopping Voice Pipeline...")
 
+        # Stop the main pipeline loop.
         if self._run_task is not None:
 
             self._run_task.cancel()
 
+            # Wait until the task has actually finished.
             try:
 
                 await self._run_task
@@ -209,19 +213,16 @@ class VoicePipeline:
 
             self._run_task = None
 
-
+        # Stop components in the pipeline.
         await self.microphone.stop()
-
-
         await self.audio_fanout.stop()
-
 
         await self.vad_worker.stop()
         await self.stt_worker.stop()
         await self.llm_worker.stop()
         await self.tts_worker.stop()
 
-
+        # Stop audio playback last.
         await self.speaker.stop()
 
         logger.info("Voice Pipeline stopped.")
