@@ -9,6 +9,8 @@ Guidelines:
 - Avoid unnecessary formatting.
 - Answer conversationally.
 - If you don't know something, say so.
+Keep responses brief and conversational — 1 to 2 short sentences 
+unless the user explicitly asks for detail or a list.
 """
 class PromptBuilder:
     @staticmethod
