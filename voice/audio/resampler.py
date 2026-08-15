@@ -42,8 +42,13 @@ class AudioResampler:
             up=self._up,
             down=self._down,
         )
+        # Clip before casting to int16. resample_poly can slightly
+        # overshoot the input's peak values (Gibbs-phenomenon ripple
+        # at transitions). Without clipping, any overshoot past the
+        # int16 range wraps around instead of saturating, turning a
+        # small overshoot into a violent, full-scale discontinuity.
 
-        return np.asarray(
-            np.round(resampled),
-            dtype=np.int16,
-        )
+        clipped = np.clip(np.round(resampled), -32768, 32767)
+
+
+        return np.asarray(clipped, dtype=np.int16)
