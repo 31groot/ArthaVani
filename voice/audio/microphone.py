@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import wave
 
 import numpy as np
 import sounddevice as sd
@@ -16,23 +17,18 @@ from config.logger import logger
 from voice.audio.resampler import AudioResampler
 
 
-
 class Microphone:
 
     def __init__(self) -> None:
 
         self.stream: sd.InputStream | None = None
 
-        self.raw_audio_queue: asyncio.Queue[
-            np.ndarray
-        ] = asyncio.Queue(
-            MAX_QUEUE_SIZE
+        self.raw_audio_queue: asyncio.Queue[np.ndarray] = (
+            asyncio.Queue(MAX_QUEUE_SIZE)
         )
 
-        self.audio_queue: asyncio.Queue[
-            bytes
-        ] = asyncio.Queue(
-           MAX_QUEUE_SIZE
+        self.audio_queue: asyncio.Queue[bytes] = (
+            asyncio.Queue(MAX_QUEUE_SIZE)
         )
 
         self.loop: asyncio.AbstractEventLoop | None = None
@@ -73,10 +69,7 @@ class Microphone:
     ) -> None:
 
         try:
-
-            self.raw_audio_queue.put_nowait(
-                audio
-            )
+            self.raw_audio_queue.put_nowait(audio)
 
         except asyncio.QueueFull:
 
@@ -91,24 +84,33 @@ class Microphone:
             "Microphone resampler started."
         )
 
+        debug_wav = wave.open(
+            "/tmp/debug_audio.wav",
+            "wb",
+        )
+
+        debug_wav.setnchannels(CHANNELS)
+        debug_wav.setsampwidth(2)
+        debug_wav.setframerate(
+            APPLICATION_SAMPLE_RATE
+        )
+
         try:
 
             while True:
 
-                audio = (
-                    await self.raw_audio_queue.get()
-                )
+                audio = await self.raw_audio_queue.get()
 
-                resampled = self.resampler.process(
-                    audio
-                )
+                resampled = self.resampler.process(audio)
 
                 if resampled.size == 0:
                     continue
 
-                audio_bytes = (
+                debug_wav.writeframes(
                     resampled.tobytes()
                 )
+
+                audio_bytes = resampled.tobytes()
 
                 await self.audio_queue.put(
                     audio_bytes
@@ -122,6 +124,10 @@ class Microphone:
 
             raise
 
+        finally:
+
+            debug_wav.close()
+
     async def start(self) -> None:
 
         if self.stream is not None:
@@ -133,9 +139,7 @@ class Microphone:
             "Opening microphone..."
         )
 
-        self.loop = (
-            asyncio.get_running_loop()
-        )
+        self.loop = asyncio.get_running_loop()
 
         self.stream = sd.InputStream(
             samplerate=MIC_SAMPLE_RATE,
@@ -175,7 +179,6 @@ class Microphone:
             self._resample_task.cancel()
 
             try:
-
                 await self._resample_task
 
             except asyncio.CancelledError:
