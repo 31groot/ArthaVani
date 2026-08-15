@@ -1,7 +1,4 @@
-from __future__ import annotations
-
 import asyncio
-import wave
 
 import numpy as np
 import sounddevice as sd
@@ -82,17 +79,6 @@ class Microphone:
 
         logger.info(
             "Microphone resampler started."
-        )
-
-        debug_wav = wave.open(
-            "/tmp/debug_audio.wav",
-            "wb",
-        )
-
-        debug_wav.setnchannels(CHANNELS)
-        debug_wav.setsampwidth(2)
-        debug_wav.setframerate(
-            APPLICATION_SAMPLE_RATE
         )
 
         try:

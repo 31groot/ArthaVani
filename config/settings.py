@@ -7,7 +7,7 @@ class Settings(BaseSettings):
 
     AZURE_OPENAI_ENDPOINT: str
     AZURE_OPENAI_API_KEY: str
-    AZURE_OPENAI_API_VERSION: str = "2025-08-07"
+    AZURE_OPENAI_API_VERSION: str
     AZURE_OPENAI_DEPLOYMENT: str
 
     DEEPGRAM_API_KEY: str
