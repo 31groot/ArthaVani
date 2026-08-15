@@ -46,6 +46,9 @@ class VADWorker:
                 for frame in frames:
 
                     probability = await self.vad.is_speech(frame)
+                    # debug 
+                    logger.info(f"VAD prob: {probability:.3f}")
+
 
                     event = self.detector.update(probability)
 
