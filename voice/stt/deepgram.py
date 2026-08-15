@@ -137,8 +137,6 @@ class DeepgramClient:
 
     def _on_message(self, message) -> None:
 
-        logger.info(f"Deepgram raw message: {type(message).__name__} -> {message!r}")
-
         # Ignore messages that are not turn-info results
         if not isinstance(message, ListenV2TurnInfo):
             return
