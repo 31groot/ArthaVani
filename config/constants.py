@@ -38,7 +38,7 @@ APPLICATION_SAMPLE_RATE = 16_000
 
 
 
-MAX_QUEUE_SIZE = 100
+MAX_QUEUE_SIZE = 300
 
 #maximum messages for history queue
 MAX_MESSAGES =  20
