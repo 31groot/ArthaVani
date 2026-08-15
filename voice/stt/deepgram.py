@@ -137,31 +137,29 @@ class DeepgramClient:
 
     def _on_message(self, message) -> None:
 
-        # Ignore messages that are not transcription results
+        logger.info(f"Deepgram raw message: {type(message).__name__} -> {message!r}")
+
+        # Ignore messages that are not turn-info results
         if not isinstance(message, ListenV2TurnInfo):
             return
 
-        # Ignore messages without any transcription alternatives
-        if not message.channel.alternatives:
-            return
-
-        # Use the first transcription alternative
-        alternative = message.channel.alternatives[0]
-        transcript = alternative.transcript
+        transcript = message.transcript
 
         # Ignore empty transcription results
         if not transcript:
             return
 
+        # v2 (Flux) reports turn state via `event`, not a per-word
+        # `is_final` flag like v1 did. EndOfTurn is the point where
+        # the user has finished speaking for this turn, which is
+        # the equivalent of a "final" transcript downstream.
+        is_final = message.event == "EndOfTurn"
+
         # Convert Deepgram's response into our application's event
         event = TranscriptEvent(
             text=transcript,
-            confidence=getattr(
-                alternative,
-                "confidence",
-                0.0,
-            ),
-            is_final=message.is_final,
+            confidence=message.end_of_turn_confidence,
+            is_final=is_final,
         )
 
         # Safely put the event into the asyncio queue
