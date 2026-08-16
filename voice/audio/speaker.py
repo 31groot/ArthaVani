@@ -19,8 +19,11 @@ class Speaker:
     def __init__(
         self,
         audio_queue: asyncio.Queue[bytes],
+        echo_canceller=None,
     ):
         self.audio_queue = audio_queue
+
+        self.echo_canceller = echo_canceller
 
         self.stream: sd.OutputStream | None = None
 
@@ -131,6 +134,11 @@ class Speaker:
 
                 outdata[:] = audio_array
 
+                if self.echo_canceller is not None:
+                    self.echo_canceller.push_reference(
+                        audio_array.reshape(-1)
+                    )
+
                 return
 
             outdata.fill(0)
@@ -174,6 +182,11 @@ class Speaker:
             )
 
             outdata[:available_frames] = audio_array
+
+            if self.echo_canceller is not None:
+                self.echo_canceller.push_reference(
+                    audio_array.reshape(-1)
+                )
 
     async def clear(self) -> None:
 
