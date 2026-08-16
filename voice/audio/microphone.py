@@ -14,18 +14,28 @@ from config.logger import logger
 from voice.audio.resampler import AudioResampler
 
 
+
 class Microphone:
 
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        echo_canceller=None,
+    ) -> None:
 
         self.stream: sd.InputStream | None = None
 
-        self.raw_audio_queue: asyncio.Queue[np.ndarray] = (
-            asyncio.Queue(MAX_QUEUE_SIZE)
+        self.echo_canceller = echo_canceller
+
+        self.raw_audio_queue: asyncio.Queue[
+            np.ndarray
+        ] = asyncio.Queue(
+            MAX_QUEUE_SIZE
         )
 
-        self.audio_queue: asyncio.Queue[bytes] = (
-            asyncio.Queue(MAX_QUEUE_SIZE)
+        self.audio_queue: asyncio.Queue[
+            bytes
+        ] = asyncio.Queue(
+           MAX_QUEUE_SIZE
         )
 
         self.loop: asyncio.AbstractEventLoop | None = None
@@ -36,6 +46,9 @@ class Microphone:
         )
 
         self._resample_task: asyncio.Task | None = None
+
+        self._dropped_chunk_count = 0
+        self._last_drop_log_time = 0.0
 
     def _audio_callback(
         self,
@@ -66,14 +79,30 @@ class Microphone:
     ) -> None:
 
         try:
-            self.raw_audio_queue.put_nowait(audio)
+
+            self.raw_audio_queue.put_nowait(
+                audio
+            )
 
         except asyncio.QueueFull:
 
-            logger.warning(
-                "Raw microphone queue full. "
-                "Dropping audio chunk."
-            )
+            self._dropped_chunk_count += 1
+
+            # Only log once per second, no matter how many chunks
+            # get dropped in that window, so a real backlog doesn't
+            # flood the terminal.
+            now = asyncio.get_event_loop().time()
+
+            if now - self._last_drop_log_time >= 1.0:
+
+                logger.warning(
+                    f"Raw microphone queue full. Dropped "
+                    f"{self._dropped_chunk_count} chunk(s) in the "
+                    f"last second."
+                )
+
+                self._dropped_chunk_count = 0
+                self._last_drop_log_time = now
 
     async def _resample_loop(self) -> None:
 
@@ -85,18 +114,30 @@ class Microphone:
 
             while True:
 
-                audio = await self.raw_audio_queue.get()
+                audio = (
+                    await self.raw_audio_queue.get()
+                )
 
-                resampled = self.resampler.process(audio)
+                resampled = self.resampler.process(
+                    audio
+                )
 
                 if resampled.size == 0:
                     continue
 
-                debug_wav.writeframes(
+                if self.echo_canceller is not None:
+
+                    loop = asyncio.get_running_loop()
+
+                    resampled = await loop.run_in_executor(
+                        None,
+                        self.echo_canceller.process,
+                        resampled,
+                    )
+
+                audio_bytes = (
                     resampled.tobytes()
                 )
-
-                audio_bytes = resampled.tobytes()
 
                 await self.audio_queue.put(
                     audio_bytes
@@ -110,10 +151,6 @@ class Microphone:
 
             raise
 
-        finally:
-
-            debug_wav.close()
-
     async def start(self) -> None:
 
         if self.stream is not None:
@@ -125,7 +162,9 @@ class Microphone:
             "Opening microphone..."
         )
 
-        self.loop = asyncio.get_running_loop()
+        self.loop = (
+            asyncio.get_running_loop()
+        )
 
         self.stream = sd.InputStream(
             samplerate=MIC_SAMPLE_RATE,
@@ -165,6 +204,7 @@ class Microphone:
             self._resample_task.cancel()
 
             try:
+
                 await self._resample_task
 
             except asyncio.CancelledError:
