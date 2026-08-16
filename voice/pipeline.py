@@ -3,6 +3,7 @@ import asyncio
 from config.constants import MAX_QUEUE_SIZE
 from config.logger import logger
 
+from voice.audio.aec import EchoCanceller
 from voice.audio.audio_fanout import AudioFanout
 from voice.audio.microphone import Microphone
 from voice.audio.speaker import Speaker
@@ -19,7 +20,7 @@ from voice.tts.elevenlabs import ElevenLabsTTS
 from voice.tts.worker import TTSWorker
 
 from voice.vad.detector import SpeechDetector
-from voice.vad.events import ConversationEvent
+from voice.vad.events import ConversationEvent, SpeechState
 from voice.vad.silero import SileroVAD
 from voice.vad.worker import VADWorker
 
@@ -64,10 +65,17 @@ class VoicePipeline:
         )
 
         # Hardware / input-output components.
-        self.microphone = Microphone()
+        self.echo_canceller = EchoCanceller(
+            filter_length=512,
+        )
+
+        self.microphone = Microphone(
+            echo_canceller=self.echo_canceller,
+        )
 
         self.speaker = Speaker(
             audio_queue=self.speaker_audio_queue,
+            echo_canceller=self.echo_canceller,
         )
 
         # Takes microphone audio and sends the same audio
@@ -100,19 +108,6 @@ class VoicePipeline:
             transcript_queue=self.transcript_queue,
         )
 
-        # LLM components.
-        self.azure_llm = AzureLLM()
-
-        self.sentence_splitter = SentenceSplitter(
-            sentence_queue=self.sentence_queue,
-        )
-
-        self.llm_worker = LLMWorker(
-            llm=self.azure_llm,
-            splitter=self.sentence_splitter,
-            transcript_queue=self.transcript_queue,
-        )
-
         # Text-to-speech components.
         self.elevenlabs = ElevenLabsTTS()
 
@@ -122,8 +117,34 @@ class VoicePipeline:
             audio_queue=self.speaker_audio_queue,
         )
 
+        # LLM components.
+        self.azure_llm = AzureLLM()
+
+        self.sentence_splitter = SentenceSplitter(
+            sentence_queue=self.sentence_queue,
+        )
+
+        async def _on_new_turn() -> None:
+            # A new turn interrupted a previous one: stop whatever
+            # TTS is speaking/queued and clear the speaker's
+            # playback buffer so stale audio doesn't keep playing.
+            await self.tts_worker.interrupt()
+            await self.speaker.clear()
+
+        self._on_new_turn = _on_new_turn
+
+        self.llm_worker = LLMWorker(
+            llm=self.azure_llm,
+            splitter=self.sentence_splitter,
+            transcript_queue=self.transcript_queue,
+            on_new_turn=_on_new_turn,
+        )
+
         # Stores the main pipeline task.
         self._run_task: asyncio.Task | None = None
+
+        # Stores the barge-in listener task.
+        self._barge_in_task: asyncio.Task | None = None
 
     async def start(self) -> None:
 
@@ -154,7 +175,41 @@ class VoicePipeline:
             self.run()
         )
 
+        # Start the loop that listens for VAD speech-start events
+        # and uses them to interrupt any in-progress response
+        # (true barge-in — doesn't wait for STT to finish).
+        self._barge_in_task = asyncio.create_task(
+            self._barge_in_loop()
+        )
+
         logger.info("Voice Pipeline started.")
+
+    async def _barge_in_loop(self) -> None:
+
+        logger.info("Barge-in listener started.")
+
+        try:
+
+            while True:
+
+                event = await self.conversation_queue.get()
+
+                if event.state is not SpeechState.STARTED:
+                    continue
+
+                logger.info(
+                    "Speech detected, interrupting any "
+                    "in-progress response."
+                )
+
+                await self.llm_worker.interrupt()
+                await self._on_new_turn()
+
+        except asyncio.CancelledError:
+
+            logger.info("Barge-in listener stopped.")
+
+            raise
 
     async def run(self) -> None:
 
@@ -212,6 +267,18 @@ class VoicePipeline:
                 pass
 
             self._run_task = None
+
+        # Stop the barge-in listener.
+        if self._barge_in_task is not None:
+
+            self._barge_in_task.cancel()
+
+            try:
+                await self._barge_in_task
+            except asyncio.CancelledError:
+                pass
+
+            self._barge_in_task = None
 
         # Stop components in the pipeline.
         await self.microphone.stop()

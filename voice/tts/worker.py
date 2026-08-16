@@ -19,6 +19,7 @@ class TTSWorker:
         self.audio_queue = audio_queue
 
         self._task: asyncio.Task | None = None
+        self._synthesis_task: asyncio.Task | None = None
 
     async def run(self) -> None:
 
@@ -39,11 +40,16 @@ class TTSWorker:
                     f"TTS sentence: {text}"
                 )
 
-                async for audio_chunk in self.tts.stream(text):
+                self._synthesis_task = asyncio.create_task(
+                    self._speak(text)
+                )
 
-                    await self.audio_queue.put(
-                        audio_chunk
-                    )
+                try:
+                    await self._synthesis_task
+                except asyncio.CancelledError:
+                    pass
+                finally:
+                    self._synthesis_task = None
 
         except asyncio.CancelledError:
 
@@ -58,6 +64,31 @@ class TTSWorker:
             )
 
             raise
+
+    async def _speak(self, text: str) -> None:
+
+        async for audio_chunk in self.tts.stream(text):
+
+            await self.audio_queue.put(
+                audio_chunk
+            )
+
+
+    async def interrupt(self) -> None:
+
+        # Drop any sentences still waiting to be spoken.
+        while True:
+            try:
+                self.sentence_queue.get_nowait()
+            except asyncio.QueueEmpty:
+                break
+
+        # Stop whatever's currently being synthesized/played.
+        if (
+            self._synthesis_task is not None
+            and not self._synthesis_task.done()
+        ):
+            self._synthesis_task.cancel()
 
     def start(self) -> None:
 
