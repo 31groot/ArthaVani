@@ -10,6 +10,8 @@ from config.constants import (
     CHUNK_SIZE,
     MAX_QUEUE_SIZE,
     SAMPLE_RATE,
+    INITIAL_VOL,
+    DROPPED_VOL,
 )
 from config.logger import logger
 
@@ -33,6 +35,10 @@ class Speaker:
         self._buffer = bytearray()
 
         self._buffer_lock = threading.Lock()
+
+        # Volume multiplier applied to outgoing audio. 1.0 = full
+        # volume, lower values duck the assistant's playback
+        self._volume = INITIAL_VOL
 
         self._task: asyncio.Task | None = None
 
@@ -97,9 +103,7 @@ class Speaker:
         ).itemsize
 
         required_bytes = (
-            frames
-            * CHANNELS
-            * bytes_per_sample
+            frames * CHANNELS * bytes_per_sample
         )
 
         with self._buffer_lock:
@@ -132,6 +136,12 @@ class Speaker:
                     CHANNELS,
                 )
 
+                if self._volume != INITIAL_VOL:
+                    audio_array = (
+                        audio_array.astype(np.float32)
+                        * self._volume
+                    ).astype(np.int16)
+
                 outdata[:] = audio_array
 
                 if self.echo_canceller is not None:
@@ -149,22 +159,18 @@ class Speaker:
             available_bytes = len(self._buffer)
 
             available_samples = (
-                available_bytes
-                // bytes_per_sample
+                available_bytes // bytes_per_sample
             )
 
             available_frames = (
-                available_samples
-                // CHANNELS
+                available_samples // CHANNELS
             )
 
             if available_frames <= 0:
                 return
 
             chunk_bytes = (
-                available_frames
-                * CHANNELS
-                * bytes_per_sample
+                available_frames * CHANNELS * bytes_per_sample
             )
 
             chunk = self._buffer[:chunk_bytes]
@@ -181,6 +187,12 @@ class Speaker:
                 CHANNELS,
             )
 
+            if self._volume != INITIAL_VOL:
+                audio_array = (
+                    audio_array.astype(np.float32)
+                    * self._volume
+                ).astype(np.int16)
+
             outdata[:available_frames] = audio_array
 
             if self.echo_canceller is not None:
@@ -188,10 +200,20 @@ class Speaker:
                     audio_array.reshape(-1)
                 )
 
+    def duck(self, level: float = DROPPED_VOL) -> None:
+
+        with self._buffer_lock:
+            self._volume = level
+
+    def unduck(self) -> None:
+        with self._buffer_lock:
+            self._volume = INITIAL_VOL
+
     async def clear(self) -> None:
 
         with self._buffer_lock:
             self._buffer.clear()
+            self._volume = INITIAL_VOL
 
         while True:
 
@@ -212,6 +234,9 @@ class Speaker:
             except asyncio.QueueEmpty:
 
                 break
+
+        if self.echo_canceller is not None:
+            self.echo_canceller.notify_playback_stopped()
 
     async def stop(self) -> None:
 
