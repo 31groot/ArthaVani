@@ -1,6 +1,6 @@
 import asyncio
 
-from config.constants import MAX_QUEUE_SIZE
+from config.constants import MAX_QUEUE_SIZE, FILTER_LENGTH, DELAY_SAMPLES
 from config.logger import logger
 
 from voice.audio.aec import EchoCanceller
@@ -66,7 +66,8 @@ class VoicePipeline:
 
         # Hardware / input-output components.
         self.echo_canceller = EchoCanceller(
-            filter_length=512,
+            filter_length=FILTER_LENGTH,
+            delay_samples=DELAY_SAMPLES,
         )
 
         self.microphone = Microphone(
@@ -194,6 +195,38 @@ class VoicePipeline:
 
                 event = await self.conversation_queue.get()
 
+                logger.info(
+                    f"Conversation event: {event.state}"
+                )
+
+                if event.state is SpeechState.POSSIBLE_STARTED:
+                    # Eager, low-confidence signal — duck the
+                    # assistant's volume immediately rather than
+                    # waiting out the full confirmation delay.
+                    # Shrinks the acoustic overlap window that was
+                    # causing the user's opening words to get lost
+                    # during real barge-ins.
+                    self.speaker.duck()
+                    continue
+
+                if event.state is SpeechState.POSSIBLE_ENDED:
+                    # The eager signal didn't pan out (e.g. a brief
+                    # noise) — restore full volume.
+                    self.speaker.unduck()
+                    continue
+
+                if event.state is SpeechState.ENDED:
+                    # Safety net: if Deepgram's own EndOfTurn
+                    # doesn't arrive shortly after our VAD says the
+                    # user has gone quiet, promote whatever interim
+                    # transcript it last gave us instead of letting
+                    # the turn hang or silently merge into the next
+                    # utterance.
+                    asyncio.create_task(
+                        self._finalize_watchdog()
+                    )
+                    continue
+
                 if event.state is not SpeechState.STARTED:
                     continue
 
@@ -210,6 +243,21 @@ class VoicePipeline:
             logger.info("Barge-in listener stopped.")
 
             raise
+
+        except Exception:
+
+            logger.exception("Barge-in listener crashed.")
+
+            raise
+
+    async def _finalize_watchdog(self) -> None:
+
+        # Give Deepgram a window to send its own EndOfTurn before
+        # we step in. Long enough to not race a normal EndOfTurn,
+        # short enough not to noticeably add to response latency.
+        await asyncio.sleep(1.2)
+
+        await self.deepgram.force_finalize()
 
     async def run(self) -> None:
 

@@ -31,6 +31,17 @@ class DeepgramClient:
 
         self._listen_task: asyncio.Task | None = None
 
+        # Latest non-final transcript we've seen for the turn
+        # currently in progress, and whether that turn has already
+        # been finalized (either by Deepgram itself or by us via
+        # force_finalize()). Used as a fallback: if Deepgram's own
+        # EndOfTurn never arrives after the user has clearly gone
+        # quiet (per our own VAD), we promote this instead of
+        # hanging indefinitely or silently merging into the next
+        # utterance.
+        self._last_interim: TranscriptEvent | None = None
+        self._turn_finalized = True
+
     async def connect(self) -> None:
 
         logger.info("Connecting to Deepgram...")
@@ -42,6 +53,12 @@ class DeepgramClient:
                 model=settings.DEEPGRAM_MODEL,
                 encoding="linear16",
                 sample_rate=SAMPLE_RATE,
+                # 0.5 (lowest) was cutting users off mid-sentence on
+                # a normal breath/pause. Default (unset) was hanging
+                # indefinitely on some turns. 0.7 aims for a middle
+                # ground: still closes on genuine pauses without
+                # firing on every micro-pause.
+                eot_threshold=0.7,
             )
         )
 
@@ -143,6 +160,7 @@ class DeepgramClient:
 
         transcript = message.transcript
 
+
         # Ignore empty transcription results
         if not transcript:
             return
@@ -160,9 +178,53 @@ class DeepgramClient:
             is_final=is_final,
         )
 
+        if is_final:
+            self._turn_finalized = True
+            self._last_interim = None
+        else:
+            # A new turn has started producing interim results;
+            # track it as the fallback candidate and mark this
+            # turn as not-yet-finalized.
+            self._last_interim = event
+            self._turn_finalized = False
+
         # Safely put the event into the asyncio queue
         if self.loop is not None and self.loop.is_running():
             self.loop.call_soon_threadsafe(
                 self._events.put_nowait,
                 event,
             )
+
+    async def force_finalize(self) -> None:
+        """
+        Promote the latest interim transcript to a final one.
+
+        Called when our own VAD has detected the user has gone
+        quiet, but Deepgram's own EndOfTurn never arrived for that
+        speech. Without this, the turn just sits open indefinitely
+        and its words silently get absorbed into whatever the user
+        says next (see: turns merging together / apparent "hangs").
+
+        No-ops if the turn was already finalized in the meantime
+        (i.e. Deepgram's real EndOfTurn beat us to it) or if there
+        is no interim transcript to promote.
+        """
+
+        if self._turn_finalized or self._last_interim is None:
+            return
+
+        logger.info(
+            "Deepgram EndOfTurn didn't arrive after silence — "
+            "force-finalizing last interim transcript."
+        )
+
+        forced_event = TranscriptEvent(
+            text=self._last_interim.text,
+            confidence=self._last_interim.confidence,
+            is_final=True,
+        )
+
+        self._turn_finalized = True
+        self._last_interim = None
+
+        await self._events.put(forced_event)
