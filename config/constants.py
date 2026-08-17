@@ -74,6 +74,12 @@ DELAY_SAMPLES = 1600
 # Adaptation step size for the echo cancellation filter.
 MU = 0.4
 
+#Full volume of the assistance
+INITIAL_VOL = 1.0
+
+#Volume dropped of assistance
+DROPPED_VOL = 0.2
+
 # Amount of speaker/reference audio retained for echo cancellation.
 REFERENCE_BUFFER_SECONDS = 3.0
 
