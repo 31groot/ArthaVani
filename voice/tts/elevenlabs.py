@@ -5,7 +5,6 @@ from elevenlabs import AsyncElevenLabs
 from config.logger import logger
 from config.settings import settings
 
-
 class ElevenLabsTTS:
 
     def __init__(self):
