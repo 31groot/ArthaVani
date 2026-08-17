@@ -16,7 +16,7 @@ class Settings(BaseSettings):
     ELEVENLABS_API_KEY: str
     ELEVENLABS_VOICE_ID: str
 
-    LOG_LEVEL: str = "INFO"
+    LOG_LEVEL: str
 
     """Configure how settings are loaded."""
     model_config = SettingsConfigDict(

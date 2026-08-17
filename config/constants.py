@@ -65,7 +65,7 @@ MAX_MESSAGES = 20
 
 
 # Number of taps/samples used by the acoustic echo cancellation filter.
-FILTER_LENGTH = 2048
+FILTER_LENGTH = 512
 
 # Estimated delay between the reference audio and microphone audio,
 # expressed in samples.
