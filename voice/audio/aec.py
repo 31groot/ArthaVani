@@ -1,7 +1,13 @@
 import threading
-
+import time
 import numpy as np
-
+from config.constants import (
+     SAMPLE_RATE,
+     FILTER_LENGTH,
+     DELAY_SAMPLES,
+     MU,
+     REFERENCE_BUFFER_SECONDS,
+)
 
 class EchoCanceller:
     """
@@ -23,13 +29,13 @@ class EchoCanceller:
 
     def __init__(
         self,
-        filter_length: int = 2048,
-        delay_samples: int = 1600,
-        mu: float = 0.4,
-        reference_buffer_seconds: float = 3.0,
-        sample_rate: int = 16000,
+        filter_length: int = FILTER_LENGTH,
+        delay_samples: int = DELAY_SAMPLES,
+        mu: float = MU,
+        reference_buffer_seconds: float = REFERENCE_BUFFER_SECONDS,
+        sample_rate: int = SAMPLE_RATE,
     ) -> None:
-
+        
         self.filter_length = filter_length
         self.delay_samples = delay_samples
         self.mu = mu
@@ -50,10 +56,38 @@ class EchoCanceller:
 
         self._lock = threading.Lock()
 
+        self._last_reference_time = 0.0
+        self._silence_bypass_seconds = 0.6
+
+        # Rolling peak of recently played (far-end) audio, used by
+        # the double-talk detector below.
+        self._recent_far_peak = 0.0
+        self._far_peak_decay = 0.995
+
+        # If the near-end (mic) signal is louder than this fraction
+        # of the recent far-end peak, assume the user is talking
+        # over the assistant (double-talk) and bypass cancellation
+        # for that block rather than risk attenuating real speech.
+        self.double_talk_threshold = 0.5
+
         # Tracks how many near-end samples have been processed, so
         # we know which reference samples correspond to "now minus
         # delay".
         self._near_total_processed = 0
+
+    def notify_playback_stopped(self) -> None:
+        """
+        Call this when playback is forcibly stopped/cleared (e.g.
+        barge-in). Immediately treats any further mic audio as
+        having no recent echo to cancel, instead of waiting for the
+        normal silence-bypass timer to elapse — otherwise the
+        filter keeps actively (and stale-ly) filtering right after
+        an abrupt stop, which can end up attenuating the user's
+        actual next words.
+        """
+
+        with self._lock:
+            self._last_reference_time = 0.0
 
     def push_reference(self, audio: np.ndarray) -> None:
         """
@@ -95,6 +129,18 @@ class EchoCanceller:
 
             self._ref_write_index = end % self._ref_capacity
             self._ref_total_written += n
+            self._last_reference_time = time.monotonic()
+
+            block_peak = float(np.max(np.abs(samples))) if n else 0.0
+
+            # Exponentially-decaying peak tracker: jumps up
+            # immediately on loud playback, decays gradually after,
+            # so "recent far-end loudness" reflects what's actually
+            # been coming out of the speaker very recently.
+            self._recent_far_peak = max(
+                block_peak,
+                self._recent_far_peak * self._far_peak_decay,
+            )
 
     def process(self, audio: np.ndarray) -> np.ndarray:
         """
@@ -105,6 +151,31 @@ class EchoCanceller:
         near = self._to_float(audio)
 
         n = len(near)
+
+        with self._lock:
+            seconds_since_playback = (
+                time.monotonic() - self._last_reference_time
+            )
+
+        if seconds_since_playback > self._silence_bypass_seconds:
+            # Nothing has been played recently, so there's no echo
+            # to cancel. Pass audio through untouched rather than
+            # risk an already-adapted filter attenuating real
+            # speech during quiet periods.
+            self._near_total_processed += n
+            clipped = np.clip(near * 32768.0, -32768, 32767)
+            return clipped.astype(np.int16)
+
+        near_peak = float(np.max(np.abs(near))) if n else 0.0
+
+        with self._lock:
+            recent_far_peak = self._recent_far_peak
+
+        double_talk = (
+            recent_far_peak > 0
+            and near_peak
+            > self.double_talk_threshold * recent_far_peak
+        )
 
         output = np.empty(n, dtype=np.float32)
 
@@ -142,6 +213,16 @@ class EchoCanceller:
             error = near[i] - echo_estimate
 
             output[i] = error
+
+            if double_talk:
+                # Likely double-talk: still subtract the filter's
+                # current best echo estimate (better than passing
+                # the raw echo+voice mix straight to STT), but don't
+                # adapt the filter on this block — updating weights
+                # from a signal that's genuinely a mix of echo and
+                # real speech would corrupt the filter's model of
+                # the room's actual echo path.
+                continue
 
             norm = float(np.dot(x, x)) + 1e-6
 
