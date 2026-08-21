@@ -34,7 +34,6 @@ class AudioBuffer:
 
             frame = bytes(self._buffer[: self.frame_size])
 
-            # Remove the frame that was just extracted
             del self._buffer[: self.frame_size]
 
             frames.append(frame)
@@ -43,7 +42,6 @@ class AudioBuffer:
 
     def clear(self):
 
-        # Remove all audio currently stored in the buffer
         self._buffer.clear()
 
     @property

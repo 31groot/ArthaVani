@@ -13,8 +13,11 @@ class Settings(BaseSettings):
     DEEPGRAM_API_KEY: str
     DEEPGRAM_MODEL: str = "flux-general-en"
 
-    ELEVENLABS_API_KEY: str
-    ELEVENLABS_VOICE_ID: str
+    DISABLE_AEC: bool = False
+
+    EDGE_TTS_VOICE: str = "en-GB-SoniaNeural"
+
+    MIC_INPUT_GAIN: float = 0.5
 
     LOG_LEVEL: str
 

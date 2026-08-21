@@ -20,9 +20,6 @@ class AudioResampler:
                 "output_rate must be greater than zero."
             )
 
-        self.input_rate = input_rate
-        self.output_rate = output_rate
-
         self._up = output_rate
         self._down = input_rate
 

@@ -14,7 +14,6 @@ class AudioFanout:
         self.input_queue = input_queue
 
         # Queues belonging to the different consumers
-        # Example: [vad_queue, stt_queue]
         self.output_queues = output_queues
 
         self._task: asyncio.Task | None = None

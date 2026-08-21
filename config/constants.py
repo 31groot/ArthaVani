@@ -65,7 +65,7 @@ MAX_MESSAGES = 20
 
 
 # Number of taps/samples used by the acoustic echo cancellation filter.
-FILTER_LENGTH = 512
+FILTER_LENGTH = 1024
 
 # Estimated delay between the reference audio and microphone audio,
 # expressed in samples.
@@ -79,6 +79,20 @@ INITIAL_VOL = 1.0
 
 #Volume dropped of assistance
 DROPPED_VOL = 0.2
+
+# WebRTC's AEC operates on fixed 10ms frames.
+FRAME_MS = 10
+FRAME_SAMPLES = SAMPLE_RATE * FRAME_MS // 1000  # 160 samples @16kHz
+FRAME_BYTES = FRAME_SAMPLES * 2  # int16 -> 2 bytes/sample
+
+
+_AEC_TYPE_DESKTOP = 2
+
+# estimate (ms) of the speaker->mic round trip, used
+# only to seed WebRTC's internal delay search .
+_INITIAL_SYSTEM_DELAY_MS = 100
+
+
 
 # Amount of speaker/reference audio retained for echo cancellation.
 REFERENCE_BUFFER_SECONDS = 3.0

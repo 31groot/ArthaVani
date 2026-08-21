@@ -1,4 +1,5 @@
 import asyncio
+import time
 
 from deepgram import AsyncDeepgramClient
 from deepgram.core.events import EventType
@@ -31,16 +32,14 @@ class DeepgramClient:
 
         self._listen_task: asyncio.Task | None = None
 
-        # Latest non-final transcript we've seen for the turn
-        # currently in progress, and whether that turn has already
-        # been finalized (either by Deepgram itself or by us via
-        # force_finalize()). Used as a fallback: if Deepgram's own
+        # if Deepgram's own
         # EndOfTurn never arrives after the user has clearly gone
         # quiet (per our own VAD), we promote this instead of
         # hanging indefinitely or silently merging into the next
         # utterance.
         self._last_interim: TranscriptEvent | None = None
         self._turn_finalized = True
+        self._last_interim_time = 0.0
 
     async def connect(self) -> None:
 
@@ -53,11 +52,6 @@ class DeepgramClient:
                 model=settings.DEEPGRAM_MODEL,
                 encoding="linear16",
                 sample_rate=SAMPLE_RATE,
-                # 0.5 (lowest) was cutting users off mid-sentence on
-                # a normal breath/pause. Default (unset) was hanging
-                # indefinitely on some turns. 0.7 aims for a middle
-                # ground: still closes on genuine pauses without
-                # firing on every micro-pause.
                 eot_threshold=0.7,
             )
         )
@@ -154,21 +148,16 @@ class DeepgramClient:
 
     def _on_message(self, message) -> None:
 
-        # Ignore messages that are not turn-info results
         if not isinstance(message, ListenV2TurnInfo):
             return
 
-        transcript = message.transcript
-
+        transcript = message.transcript or ""
 
         # Ignore empty transcription results
         if not transcript:
             return
 
-        # v2 (Flux) reports turn state via `event`, not a per-word
-        # `is_final` flag like v1 did. EndOfTurn is the point where
-        # the user has finished speaking for this turn, which is
-        # the equivalent of a "final" transcript downstream.
+
         is_final = message.event == "EndOfTurn"
 
         # Convert Deepgram's response into our application's event
@@ -179,14 +168,28 @@ class DeepgramClient:
         )
 
         if is_final:
+            logger.info(
+                "STT final: text=%r confidence=%.3f event=%s",
+                transcript,
+                message.end_of_turn_confidence,
+                message.event,
+            )
             self._turn_finalized = True
             self._last_interim = None
+            self._last_interim_time = 0.0
         else:
+            logger.info(
+                "STT interim: text=%r confidence=%.3f event=%s",
+                transcript,
+                message.end_of_turn_confidence,
+                message.event,
+            )
             # A new turn has started producing interim results;
             # track it as the fallback candidate and mark this
             # turn as not-yet-finalized.
             self._last_interim = event
             self._turn_finalized = False
+            self._last_interim_time = time.monotonic()
 
         # Safely put the event into the asyncio queue
         if self.loop is not None and self.loop.is_running():
@@ -196,27 +199,13 @@ class DeepgramClient:
             )
 
     async def force_finalize(self) -> None:
-        """
-        Promote the latest interim transcript to a final one.
-
-        Called when our own VAD has detected the user has gone
-        quiet, but Deepgram's own EndOfTurn never arrived for that
-        speech. Without this, the turn just sits open indefinitely
-        and its words silently get absorbed into whatever the user
-        says next (see: turns merging together / apparent "hangs").
-
-        No-ops if the turn was already finalized in the meantime
-        (i.e. Deepgram's real EndOfTurn beat us to it) or if there
-        is no interim transcript to promote.
-        """
+       
 
         if self._turn_finalized or self._last_interim is None:
             return
 
-        logger.info(
-            "Deepgram EndOfTurn didn't arrive after silence — "
-            "force-finalizing last interim transcript."
-        )
+        if time.monotonic() - self._last_interim_time < 2.5:
+            return
 
         forced_event = TranscriptEvent(
             text=self._last_interim.text,

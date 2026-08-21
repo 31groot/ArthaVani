@@ -27,7 +27,7 @@ class SpeechDetector:
 
         self._speaking = False
 
-        self._possible_active = False
+        # self._possible_active = False
 
     def update(self, probability) -> ConversationEvent | None:
 
@@ -37,17 +37,13 @@ class SpeechDetector:
             # Speech breaks the current silence streak
             self._silence_frames = 0
 
-            if not self._speaking and not self._possible_active:
-                # First frame of a potential speech onset. Fire
-                # this immediately, well before MIN_SPEECH_DURATION_MS
-                # worth of frames have confirmed it's real speech,
-                # so callers (e.g. ducking the assistant's volume)
-                # can react with minimal latency.
-                self._possible_active = True
+            # if not self._speaking and not self._possible_active:
 
-                return ConversationEvent(
-                    state=SpeechState.POSSIBLE_STARTED,
-                )
+            #     self._possible_active = True
+
+            #     return ConversationEvent(
+            #         state=SpeechState.POSSIBLE_STARTED,
+            #     )
 
         else:
             self._silence_frames += 1
@@ -55,16 +51,13 @@ class SpeechDetector:
             # Silence breaks the current speech streak
             self._speech_frames = 0
 
-            if not self._speaking and self._possible_active:
-                # The eager signal didn't pan out ,speech dropped
-                # out before being confirmed. Let callers know so
-                # they can undo whatever they did on the eager
-                # signal (e.g. restore volume).
-                self._possible_active = False
+            # if not self._speaking and self._possible_active:
 
-                return ConversationEvent(
-                    state=SpeechState.POSSIBLE_ENDED,
-                )
+            #     self._possible_active = False
+
+            #     return ConversationEvent(
+            #         state=SpeechState.POSSIBLE_ENDED,
+            #     )
 
         if self._speaking:
 
@@ -78,7 +71,7 @@ class SpeechDetector:
 
                 self._speaking = False
                 self._silence_frames = 0
-                self._possible_active = False
+                # self._possible_active = False
 
                 return ConversationEvent(
                     state=SpeechState.ENDED,
@@ -96,7 +89,7 @@ class SpeechDetector:
 
             self._speaking = True
             self._speech_frames = 0
-            self._possible_active = False
+            # self._possible_active = False
 
             return ConversationEvent(
                 state=SpeechState.STARTED,

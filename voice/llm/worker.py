@@ -16,13 +16,13 @@ class LLMWorker:
         llm: AzureLLM,
         splitter: SentenceSplitter,
         transcript_queue: asyncio.Queue[TranscriptEvent],
-        on_new_turn=None,
+        # on_new_turn=None,
     ):
 
         self.llm = llm
         self.splitter = splitter
         self.transcript_queue = transcript_queue
-        self.on_new_turn = on_new_turn
+        # self.on_new_turn = on_new_turn
 
         self.history = ConversationHistory()
 
@@ -47,45 +47,36 @@ class LLMWorker:
                 if not text:
                     continue
 
-                # A new final transcript means the user has started a
-                # new turn. If we're still generating/speaking a
-                # previous response, cancel it and clear whatever's
-                # queued downstream instead of piling this turn up
-                # behind it.
-                if (
-                    self._generation_task is not None
-                    and not self._generation_task.done()
-                ):
 
-                    logger.info(
-                        "New input received, cancelling in-progress "
-                        "response."
-                    )
+        #         if (
+        #             self._generation_task is not None
+        #             and not self._generation_task.done()
+        #         ):
 
-                    await self.interrupt()
+        #             await self.interrupt()
 
-                    if self.on_new_turn is not None:
-                        await self.on_new_turn()
-
-                logger.info(f"User: {text}")
+        #             if self.on_new_turn is not None:
+        #                 await self.on_new_turn()
 
                 self.history.add_user(text)
+                logger.info("User: %s", text)
+                logger.info("LLM generation started.")
 
-                self._generation_task = asyncio.create_task(
-                    self._generate()
-                )
+                # self._generation_task = asyncio.create_task(
+                #     self._generate()
+                # )
 
-        except asyncio.CancelledError:
+        # except asyncio.CancelledError:
 
-            if (
-                self._generation_task is not None
-                and not self._generation_task.done()
-            ):
-                self._generation_task.cancel()
+        #     if (
+        #         self._generation_task is not None
+        #         and not self._generation_task.done()
+        #     ):
+        #         self._generation_task.cancel()
 
-            logger.info("LLM Worker cancelled.")
+        #     logger.info("LLM Worker cancelled.")
 
-            raise
+        #     raise
 
         except Exception:
 
@@ -100,12 +91,16 @@ class LLMWorker:
         )
 
         assistant_response: list[str] = []
+        token_count = 0
 
         try:
+            logger.info("Azure GPT streaming response...")
+
 
             async for token in self.llm.stream(messages):
 
                 assistant_response.append(token.text)
+                token_count += 1
 
                 await self.splitter.feed(
                     token.text
@@ -126,30 +121,36 @@ class LLMWorker:
             )
 
         if assistant_text:
+            logger.info(
+                "LLM generation finished: %d tokens, %d chars.",
+                token_count,
+                len(assistant_text),
+            )
+
 
             self.history.add_assistant(
                 assistant_text
             )
 
-    async def interrupt(self) -> None:
+    # async def interrupt(self) -> None:
 
-        # Cancel any in-flight generation and clear the sentence
-        # splitter's buffer. Used both when a new final transcript
-        # arrives and when VAD detects the user has started
-        # speaking again (barge-in).
-        if (
-            self._generation_task is not None
-            and not self._generation_task.done()
-        ):
+    #     # Cancel any in-flight generation and clear the sentence
+    #     # splitter's buffer. Used both when a new final transcript
+    #     # arrives and when VAD detects the user has started
+    #     # speaking again (barge-in).
+    #     if (
+    #         self._generation_task is not None
+    #         and not self._generation_task.done()
+    #     ):
 
-            self._generation_task.cancel()
+    #         self._generation_task.cancel()
 
-            try:
-                await self._generation_task
-            except asyncio.CancelledError:
-                pass
+    #         try:
+    #             await self._generation_task
+    #         except asyncio.CancelledError:
+    #             pass
 
-            self.splitter.clear()
+    #         self.splitter.clear()
 
     def start(self) -> None:
 

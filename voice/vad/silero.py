@@ -29,6 +29,6 @@ class SileroVAD:
         # so it does not block the asyncio event loop.
         return await loop.run_in_executor(
             None,  # Use Python's default thread pool.
-            self._infer,  # Function to execute in the background.
-            audio_bytes,  # Audio data passed to _infer().
+            self._infer, 
+            audio_bytes,  
         )

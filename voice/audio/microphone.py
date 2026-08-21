@@ -11,6 +11,7 @@ from config.constants import (
     MIC_SAMPLE_RATE,
 )
 from config.logger import logger
+from config.settings import settings
 from voice.audio.resampler import AudioResampler
 
 
@@ -26,11 +27,7 @@ class Microphone:
 
         self.echo_canceller = echo_canceller
 
-        self.raw_audio_queue: asyncio.Queue[
-            np.ndarray
-        ] = asyncio.Queue(
-            MAX_QUEUE_SIZE
-        )
+        self.raw_audio_queue: asyncio.Queue[np.ndarray] = asyncio.Queue(MAX_QUEUE_SIZE)
 
         self.audio_queue: asyncio.Queue[
             bytes
@@ -97,8 +94,7 @@ class Microphone:
 
                 logger.warning(
                     f"Raw microphone queue full. Dropped "
-                    f"{self._dropped_chunk_count} chunk(s) in the "
-                    f"last second."
+                    f"{self._dropped_chunk_count} chunk(s) in the last second. "
                 )
 
                 self._dropped_chunk_count = 0
@@ -125,15 +121,33 @@ class Microphone:
                 if resampled.size == 0:
                     continue
 
-                if self.echo_canceller is not None:
+        
+                scaled = resampled.astype(np.float32) * settings.MIC_INPUT_GAIN
+                resampled = np.clip(np.round(scaled), -32768, 32767).astype(np.int16)
+
+                if (
+                    self.echo_canceller is not None
+                    and self.echo_canceller.is_playback_active()
+                ):
 
                     loop = asyncio.get_running_loop()
 
-                    resampled = await loop.run_in_executor(
-                        None,
-                        self.echo_canceller.process,
-                        resampled,
-                    )
+                    try:
+                        resampled = await asyncio.wait_for(
+                            loop.run_in_executor(
+                                None,
+                                self.echo_canceller.process,
+                                resampled,
+                            ),
+                            timeout=0.15,
+                        )
+                    except asyncio.TimeoutError:
+                        # Never let the optional AEC block the microphone.
+                        # If the native binding is slow, use the clean raw
+                        # microphone frame for this chunk.
+                        logger.warning(
+                            "WebRTC AEC timed out; passing microphone audio through."
+                        )
 
                 audio_bytes = (
                     resampled.tobytes()
@@ -147,6 +161,14 @@ class Microphone:
 
             logger.info(
                 "Microphone resampler stopped."
+            )
+
+            raise
+
+        except Exception:
+
+            logger.exception(
+                "Microphone resampler crashed."
             )
 
             raise

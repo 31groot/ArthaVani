@@ -2,13 +2,14 @@ import asyncio
 
 from config.logger import logger
 from voice.text.events import SentenceEvent
-from voice.tts.elevenlabs import ElevenLabsTTS
+from voice.tts.edge import EdgeTTS
+
 
 class TTSWorker:
 
     def __init__(
         self,
-        tts: ElevenLabsTTS,
+        tts: EdgeTTS,
         sentence_queue: asyncio.Queue[SentenceEvent],
         audio_queue: asyncio.Queue[bytes],
     ):
@@ -36,9 +37,7 @@ class TTSWorker:
                 if not text:
                     continue
 
-                logger.info(
-                    f"TTS sentence: {text}"
-                )
+                logger.info("TTS sentence queued: %r", text)
 
                 self._synthesis_task = asyncio.create_task(
                     self._speak(text)
@@ -46,8 +45,10 @@ class TTSWorker:
 
                 try:
                     await self._synthesis_task
+
                 except asyncio.CancelledError:
                     pass
+
                 finally:
                     self._synthesis_task = None
 
@@ -65,29 +66,51 @@ class TTSWorker:
 
             raise
 
-    async def _speak(self, text: str) -> None:
+    async def _speak(
+        self,
+        text: str,
+    ) -> None:
+
+        first_chunk = True
+        chunk_count = 0
+        total_bytes = 0
 
         async for audio_chunk in self.tts.stream(text):
+
+            if first_chunk:
+                logger.info("TTS first audio chunk received.")
+                first_chunk = False
+
+            chunk_count += 1
+            total_bytes += len(audio_chunk)
 
             await self.audio_queue.put(
                 audio_chunk
             )
 
+        logger.info(
+            "TTS audio stream queued: %d chunks / %d bytes.",
+            chunk_count,
+            total_bytes,
+        )
 
     async def interrupt(self) -> None:
 
-        # Drop any sentences still waiting to be spoken.
+        # Remove sentences waiting to be synthesized.
         while True:
+
             try:
                 self.sentence_queue.get_nowait()
+
             except asyncio.QueueEmpty:
                 break
 
-        # Stop whatever's currently being synthesized/played.
+        # Cancel current synthesis.
         if (
             self._synthesis_task is not None
             and not self._synthesis_task.done()
         ):
+
             self._synthesis_task.cancel()
 
     def start(self) -> None:
@@ -109,7 +132,6 @@ class TTSWorker:
         self._task.cancel()
 
         try:
-
             await self._task
 
         except asyncio.CancelledError:
