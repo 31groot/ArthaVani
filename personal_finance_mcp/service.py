@@ -1,7 +1,3 @@
-"""Validated, read-only finance queries used by the MCP tool layer."""
-
-from __future__ import annotations
-
 from pathlib import Path
 
 from personal_finance_mcp.database import DATA_AS_OF, DEFAULT_DATABASE_PATH, open_read_only_database

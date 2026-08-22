@@ -10,8 +10,6 @@ from personal_finance_mcp.database import DEFAULT_DATABASE_PATH, seed_database
 from personal_finance_mcp.service import PersonalFinanceService
 
 
-# Bootstrap is the only database-writing operation and occurs before serving.
-# Every MCP request opens SQLite with mode=ro and PRAGMA query_only enabled.
 seed_database(DEFAULT_DATABASE_PATH)
 service = PersonalFinanceService()
 
@@ -121,7 +119,6 @@ mcp = Server(
 
 
 async def run_stdio() -> None:
-    """Run the MCP server over stdio."""
     async with stdio_server() as (read_stream, write_stream):
         await mcp.run(read_stream, write_stream, mcp.create_initialization_options())
 
