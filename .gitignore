@@ -4,3 +4,4 @@ __pycache__/
 .env
 .vscode/
 .idea/
+personal_finance_mcp/data/*.db
