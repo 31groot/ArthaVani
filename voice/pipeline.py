@@ -9,7 +9,7 @@ from voice.audio.audio_fanout import AudioFanout
 from voice.audio.microphone import Microphone
 from voice.audio.speaker import Speaker
 
-from voice.llm.azure import AzureLLM
+from voice.llm.groq import GroqLLM
 from voice.llm.worker import LLMWorker
 
 from voice.stt.deepgram import DeepgramClient
@@ -24,7 +24,6 @@ from voice.vad.detector import SpeechDetector
 from voice.vad.events import ConversationEvent, SpeechState
 from voice.vad.silero import SileroVAD
 from voice.vad.worker import VADWorker
-
 
 class VoicePipeline:
 
@@ -120,7 +119,7 @@ class VoicePipeline:
         )
 
         # LLM components.
-        self.azure_llm = AzureLLM()
+        self.groq_llm = GroqLLM()
 
         self.sentence_splitter = SentenceSplitter(
             sentence_queue=self.sentence_queue,
@@ -136,7 +135,7 @@ class VoicePipeline:
         # self._on_new_turn = _on_new_turn
 
         self.llm_worker = LLMWorker(
-            llm=self.azure_llm,
+            llm=self.groq_llm,
             splitter=self.sentence_splitter,
             transcript_queue=self.transcript_queue,
         )

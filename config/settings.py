@@ -5,13 +5,18 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     """Define the application's settings."""
 
-    AZURE_OPENAI_ENDPOINT: str
-    AZURE_OPENAI_API_KEY: str
-    AZURE_OPENAI_API_VERSION: str
-    AZURE_OPENAI_DEPLOYMENT: str
+    AZURE_OPENAI_ENDPOINT: str =""
+    AZURE_OPENAI_API_KEY: str  =""
+    AZURE_OPENAI_API_VERSION: str  =""
+    AZURE_OPENAI_DEPLOYMENT: str =""
+
+    LLM_PROVIDER: str = "groq"
+    GROQ_API_KEY: str =""
+    GROQ_MODEL: str =""
+
 
     DEEPGRAM_API_KEY: str
-    DEEPGRAM_MODEL: str = "flux-general-en"
+    DEEPGRAM_MODEL: str = "nova-3"
 
     DISABLE_AEC: bool = False
 

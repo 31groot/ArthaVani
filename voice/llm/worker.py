@@ -62,9 +62,9 @@ class LLMWorker:
                 logger.info("User: %s", text)
                 logger.info("LLM generation started.")
 
-                # self._generation_task = asyncio.create_task(
-                #     self._generate()
-                # )
+                self._generation_task = asyncio.create_task(
+                    self._generate()
+                )
 
         # except asyncio.CancelledError:
 
@@ -94,7 +94,7 @@ class LLMWorker:
         token_count = 0
 
         try:
-            logger.info("Azure GPT streaming response...")
+            logger.info("LLM streaming response...")
 
 
             async for token in self.llm.stream(messages):
