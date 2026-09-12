@@ -3,13 +3,19 @@ import time
 
 from deepgram import AsyncDeepgramClient
 from deepgram.core.events import EventType
-from deepgram.listen.v2.types import ListenV2TurnInfo
+from deepgram.listen.v1.types import ListenV1Results, ListenV1UtteranceEnd
 
 from config.constants import SAMPLE_RATE
 from config.logger import logger
 from config.settings import settings
 
 from voice.stt.events import TranscriptEvent
+
+# Target size (in bytes) of each frame sent to Deepgram. int16 mono
+# @ 16kHz => 32000 bytes/sec, so 100ms == 3200 bytes. Batching small
+# mic callbacks into steadier ~100ms frames avoids being needlessly
+# chatty over the WebSocket.
+SEND_CHUNK_BYTES = int(SAMPLE_RATE * 2 * 0.1)
 
 
 class DeepgramClient:
@@ -32,14 +38,20 @@ class DeepgramClient:
 
         self._listen_task: asyncio.Task | None = None
 
-        # if Deepgram's own
-        # EndOfTurn never arrives after the user has clearly gone
-        # quiet (per our own VAD), we promote this instead of
-        # hanging indefinitely or silently merging into the next
-        # utterance.
+        # Nova-3's `speech_final` flag on Results messages is
+        # unreliable in practice -- it can simply never fire even
+        # after a long pause. Instead we track the latest (highest
+        # confidence / most complete) interim transcript here, and
+        # treat Deepgram's separate UtteranceEnd message (driven by
+        # utterance_end_ms below) as the real "the user is done
+        # talking" signal that promotes it to final.
         self._last_interim: TranscriptEvent | None = None
         self._turn_finalized = True
         self._last_interim_time = 0.0
+
+        # Buffer used to batch small audio chunks into
+        # larger, steadier frames before sending to Deepgram.
+        self._send_buffer = bytearray()
 
     async def connect(self) -> None:
 
@@ -48,11 +60,17 @@ class DeepgramClient:
         self.loop = asyncio.get_running_loop()
 
         self._connection_context = (
-            self.client.listen.v2.connect(
+            self.client.listen.v1.connect(
                 model=settings.DEEPGRAM_MODEL,
                 encoding="linear16",
                 sample_rate=SAMPLE_RATE,
-                eot_threshold=0.7,
+                channels=1,
+                interim_results=True,
+                smart_format=True,
+                punctuate=True,
+                endpointing=300,
+                utterance_end_ms=1000,
+                vad_events=True,
             )
         )
 
@@ -103,9 +121,18 @@ class DeepgramClient:
                 "Deepgram client is not connected."
             )
 
-        await self.connection.send_media(
-            audio
-        )
+        # Batch small chunks into steadier ~100ms frames before
+        # sending. See SEND_CHUNK_BYTES for why.
+        self._send_buffer.extend(audio)
+
+        while len(self._send_buffer) >= SEND_CHUNK_BYTES:
+
+            frame = bytes(self._send_buffer[:SEND_CHUNK_BYTES])
+            del self._send_buffer[:SEND_CHUNK_BYTES]
+
+            await self.connection.send_media(
+                frame
+            )
 
     async def receive(
         self,
@@ -148,48 +175,53 @@ class DeepgramClient:
 
     def _on_message(self, message) -> None:
 
-        if not isinstance(message, ListenV2TurnInfo):
+        if isinstance(message, ListenV1UtteranceEnd):
+            self._on_utterance_end()
             return
 
-        transcript = message.transcript or ""
+        if not isinstance(message, ListenV1Results):
+            return
+
+        alternatives = message.channel.alternatives
+
+        transcript = (
+            alternatives[0].transcript
+            if alternatives
+            else ""
+        )
+
+        confidence = (
+            alternatives[0].confidence
+            if alternatives
+            else 0.0
+        )
 
         # Ignore empty transcription results
         if not transcript:
             return
 
-
-        is_final = message.event == "EndOfTurn"
-
-        # Convert Deepgram's response into our application's event
+        # Track this as the latest interim candidate regardless of
+        # Deepgram's own is_final/speech_final flags -- finalization
+        # is driven entirely by the separate UtteranceEnd message
+        # (see _on_utterance_end), since speech_final is unreliable.
         event = TranscriptEvent(
             text=transcript,
-            confidence=message.end_of_turn_confidence,
-            is_final=is_final,
+            confidence=confidence,
+            is_final=False,
         )
 
-        if is_final:
-            logger.info(
-                "STT final: text=%r confidence=%.3f event=%s",
-                transcript,
-                message.end_of_turn_confidence,
-                message.event,
-            )
-            self._turn_finalized = True
-            self._last_interim = None
-            self._last_interim_time = 0.0
-        else:
-            logger.info(
-                "STT interim: text=%r confidence=%.3f event=%s",
-                transcript,
-                message.end_of_turn_confidence,
-                message.event,
-            )
-            # A new turn has started producing interim results;
-            # track it as the fallback candidate and mark this
-            # turn as not-yet-finalized.
-            self._last_interim = event
-            self._turn_finalized = False
-            self._last_interim_time = time.monotonic()
+        logger.info(
+            "STT interim: text=%r confidence=%.3f is_final=%s "
+            "speech_final=%s",
+            transcript,
+            confidence,
+            message.is_final,
+            message.speech_final,
+        )
+
+        self._last_interim = event
+        self._turn_finalized = False
+        self._last_interim_time = time.monotonic()
 
         # Safely put the event into the asyncio queue
         if self.loop is not None and self.loop.is_running():
@@ -198,8 +230,37 @@ class DeepgramClient:
                 event,
             )
 
+    def _on_utterance_end(self) -> None:
+
+        if self._turn_finalized or self._last_interim is None:
+            return
+
+        transcript = self._last_interim.text
+        confidence = self._last_interim.confidence
+
+        logger.info(
+            "STT final: text=%r confidence=%.3f (via UtteranceEnd)",
+            transcript,
+            confidence,
+        )
+
+        final_event = TranscriptEvent(
+            text=transcript,
+            confidence=confidence,
+            is_final=True,
+        )
+
+        self._turn_finalized = True
+        self._last_interim = None
+        self._last_interim_time = 0.0
+
+        if self.loop is not None and self.loop.is_running():
+            self.loop.call_soon_threadsafe(
+                self._events.put_nowait,
+                final_event,
+            )
+
     async def force_finalize(self) -> None:
-       
 
         if self._turn_finalized or self._last_interim is None:
             return
