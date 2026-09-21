@@ -9,7 +9,6 @@ from voice.audio.audio_fanout import AudioFanout
 from voice.audio.microphone import Microphone
 from voice.audio.speaker import Speaker
 
-from voice.llm.groq import GroqLLM
 from voice.llm.worker import LLMWorker
 
 from voice.stt.deepgram import DeepgramClient
@@ -118,8 +117,6 @@ class VoicePipeline:
             audio_queue=self.speaker_audio_queue,
         )
 
-        # LLM components.
-        self.groq_llm = GroqLLM()
 
         self.sentence_splitter = SentenceSplitter(
             sentence_queue=self.sentence_queue,
@@ -135,7 +132,6 @@ class VoicePipeline:
         # self._on_new_turn = _on_new_turn
 
         self.llm_worker = LLMWorker(
-            llm=self.groq_llm,
             splitter=self.sentence_splitter,
             transcript_queue=self.transcript_queue,
         )
