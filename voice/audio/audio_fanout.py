@@ -50,7 +50,7 @@ class AudioFanout:
     async def stop(self):
 
         if self._task is None:
-            return None
+            return
 
         self._task.cancel()
 

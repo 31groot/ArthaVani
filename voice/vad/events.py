@@ -1,13 +1,14 @@
-from dataclasses import dataclass
-from enum import Enum
-class SpeechState(Enum):
-    STARTED = "started"
-    ENDED = "ended"
- # Used to duck the assistant's volume fast, without waiting out
- # the full MIN_SPEECH_DURATION_MS confirmation delay.
-#     POSSIBLE_STARTED = "possible_started"
-#     POSSIBLE_ENDED = "possible_ended"
+from typing import ClassVar
+from pydantic import BaseModel
 
-@dataclass
-class ConversationEvent:
-    state: SpeechState
+
+class SpeechState(BaseModel):
+    STARTED: ClassVar[str] = "started"
+    ENDED: ClassVar[str] = "ended"
+
+#   POSSIBLE_STARTED: ClassVar[str] = "possible_started"
+#   POSSIBLE_ENDED: ClassVar[str] = "possible_ended" 
+
+
+class ConversationEvent(BaseModel):
+    state: str

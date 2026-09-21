@@ -13,6 +13,11 @@ CHUNK_SIZE = 1024
 # int16 = 2 bytes per sample.
 SAMPLE_WIDTH = 2
 
+# MIC_INPUT_GAIN controls microphone volume.
+# 1.0 → unchanged
+# 2.0 → roughly twice the amplitude
+# 0.5 → half the amplitude
+MIC_INPUT_GAIN = 0.5
 
 # Number of samples required by the Silero VAD for each inference frame.
 # 512 samples at 16 kHz = 32 ms of audio.
@@ -112,3 +117,5 @@ LOG_FORMAT = (
     "%(name)s | "
     "%(message)s"
 )
+
+DATA_AS_OF = "2026-08-22"

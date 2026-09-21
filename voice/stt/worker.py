@@ -15,105 +15,202 @@ class STTWorker:
         transcript_queue: asyncio.Queue[TranscriptEvent],
     ):
 
+        # DeepgramClient is responsible for the actual Deepgram
+        # connection, sending audio, and receiving transcript events.
+        #
+        # STTWorker mainly coordinates the data flow between queues
+        # and DeepgramClient.
         self.deepgram = deepgram
 
+        # Queue containing processed microphone audio.
+        
         self.audio_queue = audio_queue
 
+        # Queue where transcript events are placed after they are
+        # received from Deepgram.
+ 
         self.transcript_queue = transcript_queue
 
+        # Main worker task.
+        #
+        # This task runs run(), which starts both the send and receive
+        # loops.
         self._task: asyncio.Task | None = None
 
     async def _send_audio_loop(self) -> None:
 
-        logger.info("STT Send Loop started.")
+        logger.info(
+            "STT Send Loop started."
+        )
 
-        # Continuously take audio from the queue and send it to Deepgram
+        # Continuously wait for audio from the microphone queue.
+        #
+        # This loop is responsible for:
+        #
+        #     Microphone to audio_queue to Deepgram      
         while True:
 
-            # Wait until the next audio chunk is available
+            # Wait until another microphone audio chunk becomes available.
+            #
+            # No CPU is wasted while the queue is empty; asyncio simply
+            # suspends this task until audio arrives.
             chunk = await self.audio_queue.get()
+
+            # Give the audio to DeepgramClient.
+            #
+            # DeepgramClient.send_audio() handles its own buffering and
+            # converts the incoming small chunks into approximately
+            # 100 ms frames before sending them over the WebSocket.
             await self.deepgram.send_audio(
                 chunk
             )
 
     async def _receive_loop(self) -> None:
 
-        logger.info("STT Receive Loop started.")
+        logger.info(
+            "STT Receive Loop started."
+        )
 
-        # Continuously wait for transcripts from Deepgram
+        # Continuously wait for transcript events coming back
+        # from Deepgram.
+        #
+        # This loop is responsible for:
+        #
+        #     Deepgram to DeepgramClient to transcript_queue
         while True:
 
+            # Wait for the next TranscriptEvent from DeepgramClient.
             event = await self.deepgram.receive()
 
+            # Put the event into the queue consumed by LLMWorker.
+            #
+            # This keeps STT independent from the LLM layer.
             await self.transcript_queue.put(
                 event
             )
 
     async def run(self) -> None:
 
-        logger.info("Starting STT Worker...")
+        logger.info(
+            "Starting STT Worker..."
+        )
 
-        # Establish the Deepgram connection before starting the loops
+        # Connect to Deepgram before starting either loop.
         await self.deepgram.connect()
 
-        # Run sending and receiving concurrently
+        # Start the send and receive loops concurrently.
+        #
+        # They must run at the same time because:
+        #
+        #     send loop:
+        #         microphone to Deepgram
+        #
+        #     receive loop:
+        #         Deepgram to transcript
+        #
+        # Neither loop should block the other.
         send_task = asyncio.create_task(
             self._send_audio_loop()
         )
+
         receive_task = asyncio.create_task(
             self._receive_loop()
         )
 
         try:
-            # Keep both loops running until one of them raises an exception
+
+            # Wait for either worker loop to finish with an exception.
+            #
+            # FIRST_EXCEPTION means that if one loop crashes,
+            # we should stop the other loop as well.
             done, pending = await asyncio.wait(
-                {send_task, receive_task},
+                {
+                    send_task,
+                    receive_task,
+                },
                 return_when=asyncio.FIRST_EXCEPTION,
             )
-            # Stop the other loop if one loop fails
+
+            # If one loop failed, stop any loop that is still running.
             for task in pending:
                 task.cancel()
 
-            # Wait for the cancelled tasks to finish
+            # Wait for cancelled tasks to actually finish.
+            #
+            # return_exceptions=True prevents a cancellation exception
+            # from interrupting cleanup.
             await asyncio.gather(
                 *pending,
                 return_exceptions=True,
             )
 
+            # Check the tasks that finished.
+            #
+            # If one of them ended because of an actual exception,
+            # re-raise it so the main STT worker also fails visibly.
             for task in done:
+
                 exc = task.exception()
+
                 if exc is not None:
                     raise exc
 
         finally:
 
-            # close Deepgram when the worker stops or fails
+            # Always close the Deepgram connection when the worker
+            # stops, whether that happens because of:
+            #
+            #   - normal shutdown
+            #   - cancellation
+            #   - an exception
+            #
+            # This prevents the WebSocket/network resources from
+            # being left open.
             await self.deepgram.close()
 
     def start(self) -> None:
 
+        # Prevent accidentally starting two copies of the same worker.
         if self._task is not None:
 
             raise RuntimeError(
                 "STT Worker already started."
             )
 
+        # Start the main worker as a background asyncio task.
+        #
+        # run() will then:
+        #
+        #     1. connect to Deepgram
+        #     2. start send loop
+        #     3. start receive loop
         self._task = asyncio.create_task(
             self.run()
         )
 
     async def stop(self) -> None:
+
+        # Nothing to stop if the worker was never started.
         if self._task is None:
             return
 
+        # Cancel the main worker.
+        #
+        # run() will unwind and execute its finally block,
+        # which closes the Deepgram connection.
         self._task.cancel()
 
         try:
+
+            # Wait for the worker to finish its shutdown.
             await self._task
 
         except asyncio.CancelledError:
+
+            # Cancellation during shutdown is expected.
             pass
 
+        # Clear the task reference so the worker can be started again.
         self._task = None
 
         logger.info(
