@@ -28,7 +28,9 @@ from finance_agent.graph import (
     FINANCE_AGENT_SYSTEM_PROMPT,
 )
 
-from finance_agent.mcp_client import PersonalFinanceMCPClient
+from finance_agent.mcp.groww import GrowwMCPClient
+from finance_agent.mcp.zerodha import ZerodhaMCPClient
+from finance_agent.mcp.registry import BrokerMCPRegistry
 
 
 class FinanceAgentRunner:
@@ -38,7 +40,7 @@ class FinanceAgentRunner:
         self,
         *,
         chat_model: BaseChatModel | None = None,
-        mcp_client: PersonalFinanceMCPClient | None = None,
+        mcp_client: Any | None = None,
         tools: Sequence[BaseTool] | None = None,
     ) -> None:
 
@@ -115,7 +117,7 @@ class FinanceAgentRunner:
             # PersonalFinanceMCPClient.
             client = (
                 self._mcp_client
-                or PersonalFinanceMCPClient()
+                or BrokerMCPRegistry([GrowwMCPClient(), ZerodhaMCPClient()])
             )
 
             # Store the client so stop() can close it later

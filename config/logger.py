@@ -14,7 +14,7 @@ def setup_logger() -> logging.Logger:
 
     logger.setLevel(settings.LOG_LEVEL)
 
-    console_handler = logging.StreamHandler(sys.stdout)
+    console_handler = logging.StreamHandler(sys.stderr)
 
     formatter = logging.Formatter(
         fmt=LOG_FORMAT,

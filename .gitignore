@@ -4,3 +4,9 @@ __pycache__/
 .env
 .vscode/
 .idea/
+.mcp-auth/
+.mcp-remote/
+*.oauth.json
+third_party/kite-mcp-server/.kite-mcp-server
+third_party/kite-mcp-server/.env
+third_party/kite-mcp-server/
