@@ -1,5 +1,8 @@
-from pydantic import BaseModel 
+from pydantic import BaseModel
+
+
 class TranscriptEvent(BaseModel):
-    text : str 
+    text: str
     confidence: float
     is_final: bool
+    speech_final: bool = False
