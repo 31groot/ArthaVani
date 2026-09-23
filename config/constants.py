@@ -27,6 +27,21 @@ VAD_FRAME_SAMPLES = 512
 # considering the user to be speaking.
 MIN_SPEECH_DURATION_MS = 250
 
+# Early speech detection used for fast barge-in ducking.
+#
+# The speaker is ducked quickly after a small amount of
+# continuous speech, while actual barge-in cancellation
+# still waits for MIN_SPEECH_DURATION_MS.
+POSSIBLE_SPEECH_DURATION_MS = 64
+POSSIBLE_SILENCE_DURATION_MS = 64
+
+# Confirmed barge-in threshold.
+#
+# The speaker is ducked at POSSIBLE_SPEECH_DURATION_MS,
+# then the active response is interrupted once speech
+# continues for this duration.
+BARGE_IN_CONFIRMATION_DURATION_MS = 128
+
 # Minimum amount of continuous silence required before
 # considering the user's speech to have ended.
 MIN_SILENCE_DURATION_MS = 500

@@ -173,12 +173,9 @@ class VoicePipeline:
 
     async def _barge_in_loop(self) -> None:
 
-        logger.info(
-            "Barge-in listener started."
-        )
+        logger.info("Barge-in listener started.")
 
         try:
-
             while True:
 
                 event = await self.conversation_queue.get()
@@ -188,23 +185,35 @@ class VoicePipeline:
                     event.state,
                 )
 
+                if event.state == SpeechState.POSSIBLE_STARTED:
+
+                    logger.info(
+                        "Possible speech detected; ducking speaker."
+                    )
+
+                    self.speaker.duck()
+                    continue
+
+                if event.state == SpeechState.POSSIBLE_ENDED:
+
+                    logger.info(
+                        "Possible speech ended before confirmation; "
+                        "restoring speaker volume."
+                    )
+
+                    self.speaker.unduck()
+                    continue
+
                 if event.state == SpeechState.STARTED:
 
                     logger.info(
-                        "Speech started; triggering barge-in."
+                        "Speech started; triggering confirmed barge-in."
                     )
 
-                    # Lower assistant volume immediately.
                     self.speaker.duck()
 
-                    # Stop any active LLM generation.
                     await self.llm_worker.interrupt()
-
-                    # Stop current TTS synthesis and remove any
-                    # sentences waiting to be synthesized.
                     await self.tts_worker.interrupt()
-
-                    # Remove audio already buffered for playback.
                     await self.speaker.clear()
 
                     continue
@@ -217,17 +226,13 @@ class VoicePipeline:
 
                     self.speaker.unduck()
 
-                    # Give Deepgram time to emit its own final turn.
                     asyncio.create_task(
                         self._finalize_watchdog()
                     )
 
         except asyncio.CancelledError:
 
-            logger.info(
-                "Barge-in listener stopped."
-            )
-
+            logger.info("Barge-in listener stopped.")
             raise
 
         except Exception:
@@ -235,7 +240,6 @@ class VoicePipeline:
             logger.exception(
                 "Barge-in listener crashed."
             )
-
             raise
 
     async def _finalize_watchdog(self) -> None:
