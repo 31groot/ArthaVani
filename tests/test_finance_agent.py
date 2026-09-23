@@ -9,6 +9,7 @@ from langchain_core.outputs import ChatGeneration, ChatResult
 from langchain_core.tools import StructuredTool
 from pydantic import BaseModel, Field
 
+from finance_agent.errors import LLMProviderError
 from finance_agent.runner import FinanceAgentRunner
 
 
@@ -22,6 +23,18 @@ class PeriodArgs(BaseModel):
 
 class StockQuoteArgs(BaseModel):
     ticker: str
+
+
+class FailingChatModel(BaseChatModel):
+    @property
+    def _llm_type(self) -> str:
+        return "failing-groq-test-model"
+
+    def bind_tools(self, tools, **kwargs):
+        return self
+
+    def _generate(self, messages, stop=None, run_manager=None, **kwargs):
+        raise RuntimeError("simulated Groq outage")
 
 
 class ScriptedChatModel(BaseChatModel):
@@ -238,6 +251,18 @@ class FinanceAgentRunnerTests(unittest.IsolatedAsyncioTestCase):
         await runner.stop()
         self.assertIsNone(runner._graph)
         self.assertIsNone(runner._tools)
+
+    async def test_llm_provider_failure_is_wrapped(self) -> None:
+        runner = FinanceAgentRunner(
+            chat_model=FailingChatModel(),
+            tools=[],
+        )
+
+        with self.assertRaises(LLMProviderError) as context:
+            await runner.ainvoke("Hello")
+
+        self.assertIn("LLM request failed", str(context.exception))
+        await runner.stop()
 
     async def test_streams_model_text_only(self) -> None:
         tools = _mock_tools([])

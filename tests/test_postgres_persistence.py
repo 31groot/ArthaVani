@@ -1,6 +1,7 @@
 import os
 import uuid
 import unittest
+from unittest.mock import patch
 
 import pytest
 from langchain_core.language_models.chat_models import BaseChatModel
@@ -10,6 +11,7 @@ from langgraph.checkpoint.memory import MemorySaver
 from langchain_core.tools import StructuredTool
 from pydantic import Field
 
+from finance_agent.errors import PostgresPersistenceError
 from finance_agent.graph import build_finance_agent_graph
 from finance_agent.runner import FinanceAgentRunner
 
@@ -70,6 +72,35 @@ class PersistenceTests(unittest.IsolatedAsyncioTestCase):
             second["messages"][-1].content,
             "You told me blue.",
         )
+
+    async def test_postgres_startup_failure_raises_clear_error(self):
+        class FailingCheckpointer:
+            async def __aenter__(self):
+                raise ConnectionError("connection refused")
+
+            async def __aexit__(self, exc_type, exc, tb):
+                return False
+
+        runner = FinanceAgentRunner(
+            chat_model=ContextAwareChatModel(),
+            tools=[],
+            database_url="postgresql://invalid",
+        )
+
+        with patch(
+            "finance_agent.runner.AsyncPostgresSaver.from_conn_string",
+            return_value=FailingCheckpointer(),
+        ):
+            with self.assertRaises(PostgresPersistenceError) as context:
+                await runner.start()
+
+        self.assertIn(
+            "PostgreSQL conversation persistence could not be initialized",
+            str(context.exception),
+        )
+        self.assertFalse(runner.is_persistent)
+        await runner.stop()
+
 
     async def test_build_config_requires_thread_id_for_persistence(self):
         runner = FinanceAgentRunner()
