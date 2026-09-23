@@ -125,6 +125,7 @@ class VoicePipeline:
         self.llm_worker = LLMWorker(
             splitter=self.sentence_splitter,
             transcript_queue=self.transcript_queue,
+            thread_id=settings.CONVERSATION_THREAD_ID,
         )
 
         # Stores the main pipeline task.

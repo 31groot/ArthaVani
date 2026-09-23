@@ -1,9 +1,9 @@
 import asyncio
 
 from config.logger import logger
+from config.settings import settings
 
 from finance_agent.runner import FinanceAgentRunner
-from voice.memory.history import ConversationHistory
 from voice.stt.events import TranscriptEvent
 from voice.text.text_splitter import SentenceSplitter
 
@@ -14,7 +14,16 @@ class LLMWorker:
         self,
         splitter: SentenceSplitter,
         transcript_queue: asyncio.Queue[TranscriptEvent],
+        thread_id: str | None = None,
     ):
+        # Identifies this voice session's conversation to the
+        # AsyncPostgresSaver checkpointer, so every turn is appended to
+        # the same persisted thread instead of starting a fresh one.
+        # Pass an explicit thread_id (e.g. a logged-in user's session id)
+        # to resume a specific prior conversation; otherwise the configured
+        # CONVERSATION_THREAD_ID is used.
+
+        self.thread_id = thread_id or settings.CONVERSATION_THREAD_ID
 
         # Converts streamed LLM text into sentence-sized pieces
         # that can be sent to the TTS pipeline incrementally.
@@ -35,10 +44,6 @@ class LLMWorker:
         # speech-to-text system.
         self.transcript_queue = transcript_queue
 
-        # Stores the conversation so the finance agent can see
-        # previous user and assistant messages.
-        self.history = ConversationHistory()
-
         # FinanceAgentRunner is responsible for actually calling
         # the LLM and available finance tools.
         self.agent_runner = FinanceAgentRunner()
@@ -53,8 +58,7 @@ class LLMWorker:
         try:
             logger.info("Starting LLM Worker...")
 
-            # Start the finance agent and its MCP connection
-            # inside this long-lived worker task.
+            # Start the finance agent inside this long-lived worker task.
             await self.agent_runner.start()
 
             while True:
@@ -68,8 +72,10 @@ class LLMWorker:
                 if not text:
                     continue
 
-                self.history.add_user(text)
-
+                # Kept for local logging/inspection only. The actual
+                # conversation context the agent sees now comes from
+                # AsyncPostgresSaver, keyed by self.thread_id -- we no
+                # longer need to replay the full history on every turn.
                 logger.info(
                     "User: %s",
                     text,
@@ -88,7 +94,7 @@ class LLMWorker:
                         pass
 
                 self._generation_task = asyncio.create_task(
-                    self._generate()
+                    self._generate(text)
                 )
 
         except asyncio.CancelledError:
@@ -110,11 +116,11 @@ class LLMWorker:
 
             # IMPORTANT:
             #
-            # Close the FinanceAgentRunner/MCP connection
+            # Close the FinanceAgentRunner/checkpointer connection
             # from this SAME worker task that started it.
             await self.agent_runner.stop()
 
-    async def _generate(self) -> None:
+    async def _generate(self, user_text: str) -> None:
 
         # Store every streamed LLM chunk so we can reconstruct
         # the complete assistant response at the end.
@@ -130,8 +136,13 @@ class LLMWorker:
             #
             # Instead of waiting for the entire answer, the agent
             # yields text chunks as they are generated.
+            #
+            # Only the new user message is sent -- AsyncPostgresSaver
+            # loads the rest of this thread_id's conversation from
+            # Postgres automatically inside the graph.
             async for text_chunk in self.agent_runner.astream_text(
-                self.history.messages()
+                user_text,
+                thread_id=self.thread_id,
             ):
 
                 # Keep the chunk so the full response can be rebuilt later.
@@ -198,11 +209,6 @@ class LLMWorker:
             len(assistant_text),
         )
 
-        # Store the complete assistant response in conversation history
-        # so future questions have access to the context.
-        self.history.add_assistant(
-            assistant_text
-        )
 
     def start(self) -> None:
 

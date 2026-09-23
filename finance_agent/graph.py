@@ -2,7 +2,9 @@
 from collections.abc import Sequence
 
 from langchain_core.language_models.chat_models import BaseChatModel
+from langchain_core.messages import SystemMessage
 from langchain_core.tools import BaseTool
+from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.graph import START, MessagesState, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 from langgraph.prebuilt import ToolNode, tools_condition
@@ -54,11 +56,29 @@ Rules:
 def build_finance_agent_graph(
     model: BaseChatModel,
     tools: Sequence[BaseTool],
+    checkpointer: BaseCheckpointSaver | None = None,
 ) -> CompiledStateGraph:
+    """Build the finance agent graph.
+
+    When `checkpointer` is provided (e.g. AsyncPostgresSaver), the graph
+    persists its MessagesState after every step, keyed by the `thread_id`
+    passed in each call's config. This lets a conversation resume across
+    process restarts and keeps concurrent sessions correctly isolated.
+
+    When `checkpointer` is None, the graph is stateless: each `ainvoke`/
+    `astream` call only sees the messages explicitly passed to it.
+    """
     model_with_tools = model.bind_tools(list(tools))
 
     async def call_model(state: MessagesState) -> dict:
-        response = await model_with_tools.ainvoke(state["messages"])
+        # The system prompt is prepended here, at inference time, rather
+        # than being passed in by the caller and persisted into checkpoint
+        # state. With a checkpointer attached, `state["messages"]` already
+        # contains the full prior conversation for this thread_id, so
+        # re-adding a SystemMessage on every turn would otherwise duplicate
+        # it in Postgres on every single turn.
+        messages = [SystemMessage(content=FINANCE_AGENT_SYSTEM_PROMPT)] + state["messages"]
+        response = await model_with_tools.ainvoke(messages)
         return {"messages": [response]}
 
     builder = StateGraph(MessagesState)
@@ -67,4 +87,4 @@ def build_finance_agent_graph(
     builder.add_edge(START, "call_model")
     builder.add_conditional_edges("call_model", tools_condition)
     builder.add_edge("tools", "call_model")
-    return builder.compile()
+    return builder.compile(checkpointer=checkpointer)

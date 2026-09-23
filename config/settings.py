@@ -24,6 +24,21 @@ class Settings(BaseSettings):
 
     WATCHLIST_DB_PATH: str = "data/watchlist.db"
 
+    # Postgres connection string used by AsyncPostgresSaver to persist
+    # LangGraph conversation state (checkpoints), keyed by thread_id.
+    #
+    # Example: postgresql://user:password@localhost:5432/arthavani
+    #
+    # Optional and defaults to None: when unset, FinanceAgentRunner falls
+    # back to its original stateless behavior (no checkpointer attached).
+    # This keeps unit tests -- which construct FinanceAgentRunner directly
+    # without a database -- working without requiring Postgres.
+    DATABASE_URL: str | None = None
+
+    # Stable LangGraph thread identifier used for the default voice
+    # conversation. Override this per user/session in the environment.
+    CONVERSATION_THREAD_ID: str = "default-user"
+
     model_config = SettingsConfigDict(
         env_file=".env",
     )
