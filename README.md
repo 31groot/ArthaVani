@@ -1,66 +1,89 @@
-# ArthaVani broker MCP integrations
+# ArthaVani
 
-ArthaVani keeps broker APIs behind MCP. LangGraph receives only broker-qualified,
-read-only tools.
+ArthaVani is a real-time voice finance assistant built around LangGraph, native Python finance tools, Deepgram speech recognition, Silero VAD, WebRTC echo cancellation, and Edge TTS.
 
-## Groww
-
-Groww uses the existing local read-only MCP server and official `growwapi`
-adapter. Its implementation is unchanged by the Zerodha self-hosting work.
-
-## Zerodha Kite
-
-ArthaVani uses the official Zerodha repository at
-`https://github.com/zerodha/kite-mcp-server`, pinned during development to
-commit `5e044dc` (current repository `master` at the time of setup).
-
-The Python client builds and starts that checkout locally in HTTP mode:
+The current architecture is:
 
 ```text
-APP_MODE=http
-APP_HOST=127.0.0.1
-APP_PORT=8080
-PUBLIC_BASE_URL=http://127.0.0.1:8080
+Microphone
+  -> VAD / AEC / Deepgram STT
+  -> LangGraph + native finance tools
+  -> Edge TTS
+  -> Speaker
 ```
 
-The MCP endpoint is:
+The previous MCP-based finance integration has been removed. Finance providers now live directly under `finance_agent/providers/` and are exposed to LangGraph through `finance_agent/tools.py`.
 
-```text
-http://127.0.0.1:8080/mcp
-```
+## Conversation persistence
 
-The official server's browser authentication routes are `/authorize` and
-`/callback`; `PUBLIC_BASE_URL` is used to generate those browser-facing URLs.
-Authentication is initiated through the official `login` MCP operation as an
-application/session setup concern. It is not exposed to LangGraph.
+ArthaVani can persist LangGraph conversation state in PostgreSQL using `AsyncPostgresSaver`. The graph stores checkpoints by `thread_id`, so the same configured conversation can resume after the application restarts.
 
-Required local configuration, kept outside source control:
+For the async voice pipeline, `AsyncPostgresSaver` is the appropriate checkpointer for async workloads. The first startup calls its `setup()` method to create or migrate the checkpoint tables.
+
+### Start PostgreSQL locally
+
+Docker is the easiest local setup:
 
 ```bash
-export KITE_API_KEY='your Kite Connect API key'
-export KITE_API_SECRET='your Kite Connect API secret'
+docker compose up -d postgres
 ```
 
-The official checkout is expected at `third_party/kite-mcp-server`. Set
-`ZERODHA_KITE_SERVER_DIR` to override that path. The checkout requires Go
-1.24.2 or newer; the current environment uses Go 1.25.5.
-
-The server is configured defensively with these exclusions:
-
-```text
-place_order, modify_order, cancel_order,
-place_gtt_order, modify_gtt_order, delete_gtt_order
-```
-
-The client applies a second read-only allowlist, and only namespaced
-`zerodha_*` tools reach LangGraph.
-
-Run the explicit local authentication diagnostic:
+Verify it is healthy:
 
 ```bash
-python -m tests.manual_zerodha_integration
+docker compose ps
 ```
 
-The diagnostic connects, discovers tools, generates the login URL, waits for
-browser authentication, then calls `get_profile` on the same MCP session. It
-never prints credentials, tokens, cookies, or the full login response.
+Copy the environment template:
+
+```bash
+cp .env.example .env
+```
+
+Then set your existing API credentials in `.env`. The persistence settings are:
+
+```env
+DATABASE_URL=postgresql://arthavani:arthavani@localhost:5432/arthavani
+CONVERSATION_THREAD_ID=default-user
+```
+
+`CONVERSATION_THREAD_ID` identifies the conversation to resume. For this single-user project, `default-user` is a useful development default. Later, replace it with a real authenticated user/session identifier.
+
+### Run ArthaVani
+
+```bash
+source .venv/bin/activate
+python main.py
+```
+
+### Tests
+
+Run the normal test suite with:
+
+```bash
+pytest -q
+```
+
+The PostgreSQL restart-persistence test is skipped unless `DATABASE_URL` is configured. To exercise it locally, start Postgres and run:
+
+```bash
+DATABASE_URL=postgresql://arthavani:arthavani@localhost:5432/arthavani pytest -q tests/test_postgres_persistence.py
+```
+
+## Repository structure
+
+```text
+finance_agent/
+  graph.py            # LangGraph state graph
+  runner.py           # async runner + Postgres checkpointing
+  tools.py            # LLM-facing native tools
+  providers/          # Groww, Yahoo, AMFI, FX, NSE, watchlist providers
+
+voice/
+  audio/              # microphone, speaker, resampling, AEC
+  llm/                # conversation-to-agent bridge
+  stt/                # Deepgram streaming STT
+  text/               # streaming sentence splitting
+  tts/                # Edge TTS
+  vad/                # Silero speech detection
+```

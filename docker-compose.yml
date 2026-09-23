@@ -1,0 +1,21 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: arthavani-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: arthavani
+      POSTGRES_USER: arthavani
+      POSTGRES_PASSWORD: arthavani
+    ports:
+      - "5432:5432"
+    volumes:
+      - arthavani_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U arthavani -d arthavani"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  arthavani_postgres_data:
