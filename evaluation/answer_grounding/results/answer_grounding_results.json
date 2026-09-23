@@ -1,0 +1,1628 @@
+{
+  "summary": {
+    "benchmark": "ArthaVani Answer Grounding + Tool Calling",
+    "version": 3,
+    "ground_truth_mode": "runtime_tool_result",
+    "llm_grounding_judge": false,
+    "memory_enabled": false,
+    "total_cases": 20,
+    "valid_cases": 20,
+    "errors": 0,
+    "tool_calling_accuracy_percent": 100.0,
+    "grounding_accuracy_percent": 100.0,
+    "both_criteria_pass_percent": 100.0,
+    "passed_both": 20,
+    "grounding_definition": "Every required factual check must be supported by the live tool result captured during the same run.",
+    "case_delay_seconds": 0.0
+  },
+  "results": [
+    {
+      "id": "AG-01",
+      "query": "How much have I invested?",
+      "expected_tools": [
+        "get_portfolio_summary"
+      ],
+      "actual_tools": [
+        "get_portfolio_summary"
+      ],
+      "tool_calls": [
+        {
+          "name": "get_portfolio_summary",
+          "args": {},
+          "id": "fc_8d66c436-b32c-4ba1-bf90-d2d1ac2333e4"
+        }
+      ],
+      "tool_selection_correct": true,
+      "tool_argument_failures": [],
+      "final_answer": "You’ve invested a total of 20,469.9 Indian rupees.",
+      "grounding": {
+        "status": "PASS",
+        "checks": [
+          {
+            "type": "number_path",
+            "passed": true,
+            "detail": "invested value: expected 20469.9"
+          }
+        ],
+        "failures": [],
+        "ground_truth_source": "runtime_tool_result",
+        "ground_truth_tool": "get_portfolio_summary",
+        "ground_truth": {
+          "holding_count": 2,
+          "portfolio_data_available": true,
+          "invested_value": 20469.9,
+          "current_value": 17424.9,
+          "profit_loss": -3045.0,
+          "profit_loss_percentage": -14.88,
+          "top_holding": "BSE",
+          "holdings": [
+            {
+              "trading_symbol": "BSE",
+              "quantity": 4.0,
+              "average_price": 4075.0,
+              "current_price": 3235.0,
+              "invested_value": 16300.0,
+              "current_value": 12940.0,
+              "profit_loss": -3360.0,
+              "profit_loss_percentage": -20.61,
+              "exchange_used": "NSE",
+              "tradable_exchanges": [
+                "NSE"
+              ],
+              "price_source": "yahoo_fallback",
+              "price_freshness": "delayed_or_unknown"
+            },
+            {
+              "trading_symbol": "DATAPATTNS",
+              "quantity": 1.0,
+              "average_price": 4169.9,
+              "current_price": 4484.8999,
+              "invested_value": 4169.9,
+              "current_value": 4484.9,
+              "profit_loss": 315.0,
+              "profit_loss_percentage": 7.55,
+              "exchange_used": "NSE",
+              "tradable_exchanges": [
+                "NSE",
+                "BSE"
+              ],
+              "price_source": "yahoo_fallback",
+              "price_freshness": "delayed_or_unknown"
+            }
+          ],
+          "allocation": [
+            {
+              "trading_symbol": "BSE",
+              "weight_percentage": 74.26
+            },
+            {
+              "trading_symbol": "DATAPATTNS",
+              "weight_percentage": 25.74
+            }
+          ],
+          "currency": "INR",
+          "market_data_available": true,
+          "market_data_realtime": false,
+          "valuation_basis": "fallback_market_value",
+          "price_source": "yahoo_fallback",
+          "price_freshness": "delayed_or_unknown",
+          "market_data_error": "Groww live market data unavailable; using Yahoo Finance fallback for 2 holding(s)."
+        }
+      },
+      "grounding_correct": true,
+      "overall": "PASS"
+    },
+    {
+      "id": "AG-02",
+      "query": "What is my portfolio worth right now?",
+      "expected_tools": [
+        "get_portfolio_summary"
+      ],
+      "actual_tools": [
+        "get_portfolio_summary"
+      ],
+      "tool_calls": [
+        {
+          "name": "get_portfolio_summary",
+          "args": {},
+          "id": "fc_1c33652b-40e5-4836-bcc8-5e806f8d35c3"
+        }
+      ],
+      "tool_selection_correct": true,
+      "tool_argument_failures": [],
+      "final_answer": "Your portfolio’s current value is ₹ 17,424.9 based on the latest available pricing, which is from a delayed Yahoo Finance fallback rather than real‑time data.",
+      "grounding": {
+        "status": "PASS",
+        "checks": [
+          {
+            "type": "number_path",
+            "passed": true,
+            "detail": "current portfolio value: expected 17424.9"
+          }
+        ],
+        "failures": [],
+        "ground_truth_source": "runtime_tool_result",
+        "ground_truth_tool": "get_portfolio_summary",
+        "ground_truth": {
+          "holding_count": 2,
+          "portfolio_data_available": true,
+          "invested_value": 20469.9,
+          "current_value": 17424.9,
+          "profit_loss": -3045.0,
+          "profit_loss_percentage": -14.88,
+          "top_holding": "BSE",
+          "holdings": [
+            {
+              "trading_symbol": "BSE",
+              "quantity": 4.0,
+              "average_price": 4075.0,
+              "current_price": 3235.0,
+              "invested_value": 16300.0,
+              "current_value": 12940.0,
+              "profit_loss": -3360.0,
+              "profit_loss_percentage": -20.61,
+              "exchange_used": "NSE",
+              "tradable_exchanges": [
+                "NSE"
+              ],
+              "price_source": "yahoo_fallback",
+              "price_freshness": "delayed_or_unknown"
+            },
+            {
+              "trading_symbol": "DATAPATTNS",
+              "quantity": 1.0,
+              "average_price": 4169.9,
+              "current_price": 4484.8999,
+              "invested_value": 4169.9,
+              "current_value": 4484.9,
+              "profit_loss": 315.0,
+              "profit_loss_percentage": 7.55,
+              "exchange_used": "NSE",
+              "tradable_exchanges": [
+                "NSE",
+                "BSE"
+              ],
+              "price_source": "yahoo_fallback",
+              "price_freshness": "delayed_or_unknown"
+            }
+          ],
+          "allocation": [
+            {
+              "trading_symbol": "BSE",
+              "weight_percentage": 74.26
+            },
+            {
+              "trading_symbol": "DATAPATTNS",
+              "weight_percentage": 25.74
+            }
+          ],
+          "currency": "INR",
+          "market_data_available": true,
+          "market_data_realtime": false,
+          "valuation_basis": "fallback_market_value",
+          "price_source": "yahoo_fallback",
+          "price_freshness": "delayed_or_unknown",
+          "market_data_error": "Groww live market data unavailable; using Yahoo Finance fallback for 2 holding(s)."
+        }
+      },
+      "grounding_correct": true,
+      "overall": "PASS"
+    },
+    {
+      "id": "AG-03",
+      "query": "What is my total profit or loss?",
+      "expected_tools": [
+        "get_portfolio_summary"
+      ],
+      "actual_tools": [
+        "get_portfolio_summary"
+      ],
+      "tool_calls": [
+        {
+          "name": "get_portfolio_summary",
+          "args": {},
+          "id": "fc_6cf9d2ae-528a-450a-a49d-f7b01c883847"
+        }
+      ],
+      "tool_selection_correct": true,
+      "tool_argument_failures": [],
+      "final_answer": "Your portfolio shows a total loss of ₹3,045.0, which is about ‑14.88 percent.",
+      "grounding": {
+        "status": "PASS",
+        "checks": [
+          {
+            "type": "number_path",
+            "passed": true,
+            "detail": "total profit or loss: expected -3045.0"
+          },
+          {
+            "type": "sentiment",
+            "passed": true,
+            "detail": "negative value should be described as a loss/down/negative result"
+          }
+        ],
+        "failures": [],
+        "ground_truth_source": "runtime_tool_result",
+        "ground_truth_tool": "get_portfolio_summary",
+        "ground_truth": {
+          "holding_count": 2,
+          "portfolio_data_available": true,
+          "invested_value": 20469.9,
+          "current_value": 17424.9,
+          "profit_loss": -3045.0,
+          "profit_loss_percentage": -14.88,
+          "top_holding": "BSE",
+          "holdings": [
+            {
+              "trading_symbol": "BSE",
+              "quantity": 4.0,
+              "average_price": 4075.0,
+              "current_price": 3235.0,
+              "invested_value": 16300.0,
+              "current_value": 12940.0,
+              "profit_loss": -3360.0,
+              "profit_loss_percentage": -20.61,
+              "exchange_used": "NSE",
+              "tradable_exchanges": [
+                "NSE"
+              ],
+              "price_source": "yahoo_fallback",
+              "price_freshness": "delayed_or_unknown"
+            },
+            {
+              "trading_symbol": "DATAPATTNS",
+              "quantity": 1.0,
+              "average_price": 4169.9,
+              "current_price": 4484.8999,
+              "invested_value": 4169.9,
+              "current_value": 4484.9,
+              "profit_loss": 315.0,
+              "profit_loss_percentage": 7.55,
+              "exchange_used": "NSE",
+              "tradable_exchanges": [
+                "NSE",
+                "BSE"
+              ],
+              "price_source": "yahoo_fallback",
+              "price_freshness": "delayed_or_unknown"
+            }
+          ],
+          "allocation": [
+            {
+              "trading_symbol": "BSE",
+              "weight_percentage": 74.26
+            },
+            {
+              "trading_symbol": "DATAPATTNS",
+              "weight_percentage": 25.74
+            }
+          ],
+          "currency": "INR",
+          "market_data_available": true,
+          "market_data_realtime": false,
+          "valuation_basis": "fallback_market_value",
+          "price_source": "yahoo_fallback",
+          "price_freshness": "delayed_or_unknown",
+          "market_data_error": "Groww live market data unavailable; using Yahoo Finance fallback for 2 holding(s)."
+        }
+      },
+      "grounding_correct": true,
+      "overall": "PASS"
+    },
+    {
+      "id": "AG-04",
+      "query": "What is my total P&L percentage?",
+      "expected_tools": [
+        "get_portfolio_summary"
+      ],
+      "actual_tools": [
+        "get_portfolio_summary"
+      ],
+      "tool_calls": [
+        {
+          "name": "get_portfolio_summary",
+          "args": {},
+          "id": "fc_ecf0d38b-7b72-44aa-9ea5-41ab82966846"
+        }
+      ],
+      "tool_selection_correct": true,
+      "tool_argument_failures": [],
+      "final_answer": "Your portfolio’s total profit‑and‑loss is negative fourteen point eight eight percent.",
+      "grounding": {
+        "status": "PASS",
+        "checks": [
+          {
+            "type": "number_path",
+            "passed": true,
+            "detail": "total P&L percentage: expected -14.88"
+          },
+          {
+            "type": "sentiment",
+            "passed": true,
+            "detail": "negative value should be described as a loss/down/negative result"
+          }
+        ],
+        "failures": [],
+        "ground_truth_source": "runtime_tool_result",
+        "ground_truth_tool": "get_portfolio_summary",
+        "ground_truth": {
+          "holding_count": 2,
+          "portfolio_data_available": true,
+          "invested_value": 20469.9,
+          "current_value": 17424.9,
+          "profit_loss": -3045.0,
+          "profit_loss_percentage": -14.88,
+          "top_holding": "BSE",
+          "holdings": [
+            {
+              "trading_symbol": "BSE",
+              "quantity": 4.0,
+              "average_price": 4075.0,
+              "current_price": 3235.0,
+              "invested_value": 16300.0,
+              "current_value": 12940.0,
+              "profit_loss": -3360.0,
+              "profit_loss_percentage": -20.61,
+              "exchange_used": "NSE",
+              "tradable_exchanges": [
+                "NSE"
+              ],
+              "price_source": "yahoo_fallback",
+              "price_freshness": "delayed_or_unknown"
+            },
+            {
+              "trading_symbol": "DATAPATTNS",
+              "quantity": 1.0,
+              "average_price": 4169.9,
+              "current_price": 4484.8999,
+              "invested_value": 4169.9,
+              "current_value": 4484.9,
+              "profit_loss": 315.0,
+              "profit_loss_percentage": 7.55,
+              "exchange_used": "NSE",
+              "tradable_exchanges": [
+                "NSE",
+                "BSE"
+              ],
+              "price_source": "yahoo_fallback",
+              "price_freshness": "delayed_or_unknown"
+            }
+          ],
+          "allocation": [
+            {
+              "trading_symbol": "BSE",
+              "weight_percentage": 74.26
+            },
+            {
+              "trading_symbol": "DATAPATTNS",
+              "weight_percentage": 25.74
+            }
+          ],
+          "currency": "INR",
+          "market_data_available": true,
+          "market_data_realtime": false,
+          "valuation_basis": "fallback_market_value",
+          "price_source": "yahoo_fallback",
+          "price_freshness": "delayed_or_unknown",
+          "market_data_error": "Groww live market data unavailable; using Yahoo Finance fallback for 2 holding(s)."
+        }
+      },
+      "grounding_correct": true,
+      "overall": "PASS"
+    },
+    {
+      "id": "AG-05",
+      "query": "How many BSE shares do I own?",
+      "expected_tools": [
+        "get_portfolio_summary"
+      ],
+      "actual_tools": [
+        "get_portfolio_summary"
+      ],
+      "tool_calls": [
+        {
+          "name": "get_portfolio_summary",
+          "args": {},
+          "id": "fc_eb571275-3be0-4de6-b54d-12e4e0906877"
+        }
+      ],
+      "tool_selection_correct": true,
+      "tool_argument_failures": [],
+      "final_answer": "You own four shares of BSE.",
+      "grounding": {
+        "status": "PASS",
+        "checks": [
+          {
+            "type": "list_number",
+            "passed": true,
+            "detail": "BSE share count: expected 4.0"
+          },
+          {
+            "type": "text_contains",
+            "passed": true,
+            "detail": "answer should contain one of ['bse']"
+          }
+        ],
+        "failures": [],
+        "ground_truth_source": "runtime_tool_result",
+        "ground_truth_tool": "get_portfolio_summary",
+        "ground_truth": {
+          "holding_count": 2,
+          "portfolio_data_available": true,
+          "invested_value": 20469.9,
+          "current_value": 17424.9,
+          "profit_loss": -3045.0,
+          "profit_loss_percentage": -14.88,
+          "top_holding": "BSE",
+          "holdings": [
+            {
+              "trading_symbol": "BSE",
+              "quantity": 4.0,
+              "average_price": 4075.0,
+              "current_price": 3235.0,
+              "invested_value": 16300.0,
+              "current_value": 12940.0,
+              "profit_loss": -3360.0,
+              "profit_loss_percentage": -20.61,
+              "exchange_used": "NSE",
+              "tradable_exchanges": [
+                "NSE"
+              ],
+              "price_source": "yahoo_fallback",
+              "price_freshness": "delayed_or_unknown"
+            },
+            {
+              "trading_symbol": "DATAPATTNS",
+              "quantity": 1.0,
+              "average_price": 4169.9,
+              "current_price": 4484.8999,
+              "invested_value": 4169.9,
+              "current_value": 4484.9,
+              "profit_loss": 315.0,
+              "profit_loss_percentage": 7.55,
+              "exchange_used": "NSE",
+              "tradable_exchanges": [
+                "NSE",
+                "BSE"
+              ],
+              "price_source": "yahoo_fallback",
+              "price_freshness": "delayed_or_unknown"
+            }
+          ],
+          "allocation": [
+            {
+              "trading_symbol": "BSE",
+              "weight_percentage": 74.26
+            },
+            {
+              "trading_symbol": "DATAPATTNS",
+              "weight_percentage": 25.74
+            }
+          ],
+          "currency": "INR",
+          "market_data_available": true,
+          "market_data_realtime": false,
+          "valuation_basis": "fallback_market_value",
+          "price_source": "yahoo_fallback",
+          "price_freshness": "delayed_or_unknown",
+          "market_data_error": "Groww live market data unavailable; using Yahoo Finance fallback for 2 holding(s)."
+        }
+      },
+      "grounding_correct": true,
+      "overall": "PASS"
+    },
+    {
+      "id": "AG-06",
+      "query": "What is my BSE average purchase price?",
+      "expected_tools": [
+        "get_portfolio_summary"
+      ],
+      "actual_tools": [
+        "get_portfolio_summary"
+      ],
+      "tool_calls": [
+        {
+          "name": "get_portfolio_summary",
+          "args": {},
+          "id": "fc_e20b0e61-9616-4238-80c4-5997919a425f"
+        }
+      ],
+      "tool_selection_correct": true,
+      "tool_argument_failures": [],
+      "final_answer": "Your average purchase price for BSE is four thousand seventy‑five rupees.",
+      "grounding": {
+        "status": "PASS",
+        "checks": [
+          {
+            "type": "list_number",
+            "passed": true,
+            "detail": "BSE average purchase price: expected 4075.0"
+          },
+          {
+            "type": "text_contains",
+            "passed": true,
+            "detail": "answer should contain one of ['bse']"
+          }
+        ],
+        "failures": [],
+        "ground_truth_source": "runtime_tool_result",
+        "ground_truth_tool": "get_portfolio_summary",
+        "ground_truth": {
+          "holding_count": 2,
+          "portfolio_data_available": true,
+          "invested_value": 20469.9,
+          "current_value": 17424.9,
+          "profit_loss": -3045.0,
+          "profit_loss_percentage": -14.88,
+          "top_holding": "BSE",
+          "holdings": [
+            {
+              "trading_symbol": "BSE",
+              "quantity": 4.0,
+              "average_price": 4075.0,
+              "current_price": 3235.0,
+              "invested_value": 16300.0,
+              "current_value": 12940.0,
+              "profit_loss": -3360.0,
+              "profit_loss_percentage": -20.61,
+              "exchange_used": "NSE",
+              "tradable_exchanges": [
+                "NSE"
+              ],
+              "price_source": "yahoo_fallback",
+              "price_freshness": "delayed_or_unknown"
+            },
+            {
+              "trading_symbol": "DATAPATTNS",
+              "quantity": 1.0,
+              "average_price": 4169.9,
+              "current_price": 4484.8999,
+              "invested_value": 4169.9,
+              "current_value": 4484.9,
+              "profit_loss": 315.0,
+              "profit_loss_percentage": 7.55,
+              "exchange_used": "NSE",
+              "tradable_exchanges": [
+                "NSE",
+                "BSE"
+              ],
+              "price_source": "yahoo_fallback",
+              "price_freshness": "delayed_or_unknown"
+            }
+          ],
+          "allocation": [
+            {
+              "trading_symbol": "BSE",
+              "weight_percentage": 74.26
+            },
+            {
+              "trading_symbol": "DATAPATTNS",
+              "weight_percentage": 25.74
+            }
+          ],
+          "currency": "INR",
+          "market_data_available": true,
+          "market_data_realtime": false,
+          "valuation_basis": "fallback_market_value",
+          "price_source": "yahoo_fallback",
+          "price_freshness": "delayed_or_unknown",
+          "market_data_error": "Groww live market data unavailable; using Yahoo Finance fallback for 2 holding(s)."
+        }
+      },
+      "grounding_correct": true,
+      "overall": "PASS"
+    },
+    {
+      "id": "AG-07",
+      "query": "What is my BSE holding worth now?",
+      "expected_tools": [
+        "get_portfolio_summary"
+      ],
+      "actual_tools": [
+        "get_portfolio_summary"
+      ],
+      "tool_calls": [
+        {
+          "name": "get_portfolio_summary",
+          "args": {},
+          "id": "fc_bca67ad7-e1df-4d00-8889-32f8583a2d7f"
+        }
+      ],
+      "tool_selection_correct": true,
+      "tool_argument_failures": [],
+      "final_answer": "Your BSE holding is currently worth about 12,940 rupees, based on the latest fallback market data.",
+      "grounding": {
+        "status": "PASS",
+        "checks": [
+          {
+            "type": "list_number",
+            "passed": true,
+            "detail": "BSE current value: expected 12940.0"
+          },
+          {
+            "type": "text_contains",
+            "passed": true,
+            "detail": "answer should contain one of ['bse']"
+          }
+        ],
+        "failures": [],
+        "ground_truth_source": "runtime_tool_result",
+        "ground_truth_tool": "get_portfolio_summary",
+        "ground_truth": {
+          "holding_count": 2,
+          "portfolio_data_available": true,
+          "invested_value": 20469.9,
+          "current_value": 17424.9,
+          "profit_loss": -3045.0,
+          "profit_loss_percentage": -14.88,
+          "top_holding": "BSE",
+          "holdings": [
+            {
+              "trading_symbol": "BSE",
+              "quantity": 4.0,
+              "average_price": 4075.0,
+              "current_price": 3235.0,
+              "invested_value": 16300.0,
+              "current_value": 12940.0,
+              "profit_loss": -3360.0,
+              "profit_loss_percentage": -20.61,
+              "exchange_used": "NSE",
+              "tradable_exchanges": [
+                "NSE"
+              ],
+              "price_source": "yahoo_fallback",
+              "price_freshness": "delayed_or_unknown"
+            },
+            {
+              "trading_symbol": "DATAPATTNS",
+              "quantity": 1.0,
+              "average_price": 4169.9,
+              "current_price": 4484.8999,
+              "invested_value": 4169.9,
+              "current_value": 4484.9,
+              "profit_loss": 315.0,
+              "profit_loss_percentage": 7.55,
+              "exchange_used": "NSE",
+              "tradable_exchanges": [
+                "NSE",
+                "BSE"
+              ],
+              "price_source": "yahoo_fallback",
+              "price_freshness": "delayed_or_unknown"
+            }
+          ],
+          "allocation": [
+            {
+              "trading_symbol": "BSE",
+              "weight_percentage": 74.26
+            },
+            {
+              "trading_symbol": "DATAPATTNS",
+              "weight_percentage": 25.74
+            }
+          ],
+          "currency": "INR",
+          "market_data_available": true,
+          "market_data_realtime": false,
+          "valuation_basis": "fallback_market_value",
+          "price_source": "yahoo_fallback",
+          "price_freshness": "delayed_or_unknown",
+          "market_data_error": "Groww live market data unavailable; using Yahoo Finance fallback for 2 holding(s)."
+        }
+      },
+      "grounding_correct": true,
+      "overall": "PASS"
+    },
+    {
+      "id": "AG-08",
+      "query": "How is my DATAPATTNS holding performing?",
+      "expected_tools": [
+        "get_portfolio_summary"
+      ],
+      "actual_tools": [
+        "get_portfolio_summary"
+      ],
+      "tool_calls": [
+        {
+          "name": "get_portfolio_summary",
+          "args": {},
+          "id": "fc_479f8c28-41e3-49eb-90f7-e79365c6f9fe"
+        }
+      ],
+      "tool_selection_correct": true,
+      "tool_argument_failures": [],
+      "final_answer": "Your DATAPATTNS position is up 315 rupees, a gain of about 7.55 percent. The current price is 4,484.90 against an average cost of 4,169.90.",
+      "grounding": {
+        "status": "PASS",
+        "checks": [
+          {
+            "type": "list_number",
+            "passed": true,
+            "detail": "DATAPATTNS P&L amount: expected 315.0"
+          },
+          {
+            "type": "list_number",
+            "passed": true,
+            "detail": "DATAPATTNS P&L percentage: expected 7.55"
+          },
+          {
+            "type": "text_contains",
+            "passed": true,
+            "detail": "answer should contain one of ['datapattns']"
+          }
+        ],
+        "failures": [],
+        "ground_truth_source": "runtime_tool_result",
+        "ground_truth_tool": "get_portfolio_summary",
+        "ground_truth": {
+          "holding_count": 2,
+          "portfolio_data_available": true,
+          "invested_value": 20469.9,
+          "current_value": 17424.9,
+          "profit_loss": -3045.0,
+          "profit_loss_percentage": -14.88,
+          "top_holding": "BSE",
+          "holdings": [
+            {
+              "trading_symbol": "BSE",
+              "quantity": 4.0,
+              "average_price": 4075.0,
+              "current_price": 3235.0,
+              "invested_value": 16300.0,
+              "current_value": 12940.0,
+              "profit_loss": -3360.0,
+              "profit_loss_percentage": -20.61,
+              "exchange_used": "NSE",
+              "tradable_exchanges": [
+                "NSE"
+              ],
+              "price_source": "yahoo_fallback",
+              "price_freshness": "delayed_or_unknown"
+            },
+            {
+              "trading_symbol": "DATAPATTNS",
+              "quantity": 1.0,
+              "average_price": 4169.9,
+              "current_price": 4484.8999,
+              "invested_value": 4169.9,
+              "current_value": 4484.9,
+              "profit_loss": 315.0,
+              "profit_loss_percentage": 7.55,
+              "exchange_used": "NSE",
+              "tradable_exchanges": [
+                "NSE",
+                "BSE"
+              ],
+              "price_source": "yahoo_fallback",
+              "price_freshness": "delayed_or_unknown"
+            }
+          ],
+          "allocation": [
+            {
+              "trading_symbol": "BSE",
+              "weight_percentage": 74.26
+            },
+            {
+              "trading_symbol": "DATAPATTNS",
+              "weight_percentage": 25.74
+            }
+          ],
+          "currency": "INR",
+          "market_data_available": true,
+          "market_data_realtime": false,
+          "valuation_basis": "fallback_market_value",
+          "price_source": "yahoo_fallback",
+          "price_freshness": "delayed_or_unknown",
+          "market_data_error": "Groww live market data unavailable; using Yahoo Finance fallback for 2 holding(s)."
+        }
+      },
+      "grounding_correct": true,
+      "overall": "PASS"
+    },
+    {
+      "id": "AG-09",
+      "query": "What percentage of my portfolio is BSE?",
+      "expected_tools": [
+        "get_portfolio_risk"
+      ],
+      "actual_tools": [
+        "get_portfolio_risk"
+      ],
+      "tool_calls": [
+        {
+          "name": "get_portfolio_risk",
+          "args": {},
+          "id": "fc_ed8bd9a7-862c-47fe-b2f1-26a6af0f0443"
+        }
+      ],
+      "tool_selection_correct": true,
+      "tool_argument_failures": [],
+      "final_answer": "Your BSE holding makes up about seventy‑four point two six percent of the portfolio.",
+      "grounding": {
+        "status": "PASS",
+        "checks": [
+          {
+            "type": "allocation_number",
+            "passed": true,
+            "detail": "BSE portfolio weight: expected 74.26"
+          },
+          {
+            "type": "text_contains",
+            "passed": true,
+            "detail": "answer should contain one of ['bse']"
+          }
+        ],
+        "failures": [],
+        "ground_truth_source": "runtime_tool_result",
+        "ground_truth_tool": "get_portfolio_risk",
+        "ground_truth": {
+          "holding_count": 2,
+          "largest_holding": "BSE",
+          "largest_holding_weight_percentage": 74.26,
+          "concentration_hhi": 0.6177,
+          "interpretation": "higher values indicate more concentration",
+          "allocation": [
+            {
+              "trading_symbol": "BSE",
+              "weight_percentage": 74.26
+            },
+            {
+              "trading_symbol": "DATAPATTNS",
+              "weight_percentage": 25.74
+            }
+          ],
+          "allocation_basis": "live_market_value",
+          "portfolio_data_available": true,
+          "market_data_available": true,
+          "market_data_realtime": false,
+          "market_data_error": "Groww live market data unavailable; using Yahoo Finance fallback for 2 holding(s)."
+        }
+      },
+      "grounding_correct": true,
+      "overall": "PASS"
+    },
+    {
+      "id": "AG-10",
+      "query": "What percentage of my portfolio is DATAPATTNS?",
+      "expected_tools": [
+        "get_portfolio_risk"
+      ],
+      "actual_tools": [
+        "get_portfolio_risk"
+      ],
+      "tool_calls": [
+        {
+          "name": "get_portfolio_risk",
+          "args": {},
+          "id": "fc_5e490f63-d897-45de-b91d-95b132042c5d"
+        }
+      ],
+      "tool_selection_correct": true,
+      "tool_argument_failures": [],
+      "final_answer": "DATAPATTNS makes up about twenty‑five point seven four percent of your portfolio.",
+      "grounding": {
+        "status": "PASS",
+        "checks": [
+          {
+            "type": "allocation_number",
+            "passed": true,
+            "detail": "DATAPATTNS portfolio weight: expected 25.74"
+          },
+          {
+            "type": "text_contains",
+            "passed": true,
+            "detail": "answer should contain one of ['datapattns']"
+          }
+        ],
+        "failures": [],
+        "ground_truth_source": "runtime_tool_result",
+        "ground_truth_tool": "get_portfolio_risk",
+        "ground_truth": {
+          "holding_count": 2,
+          "largest_holding": "BSE",
+          "largest_holding_weight_percentage": 74.26,
+          "concentration_hhi": 0.6177,
+          "interpretation": "higher values indicate more concentration",
+          "allocation": [
+            {
+              "trading_symbol": "BSE",
+              "weight_percentage": 74.26
+            },
+            {
+              "trading_symbol": "DATAPATTNS",
+              "weight_percentage": 25.74
+            }
+          ],
+          "allocation_basis": "live_market_value",
+          "portfolio_data_available": true,
+          "market_data_available": true,
+          "market_data_realtime": false,
+          "market_data_error": "Groww live market data unavailable; using Yahoo Finance fallback for 2 holding(s)."
+        }
+      },
+      "grounding_correct": true,
+      "overall": "PASS"
+    },
+    {
+      "id": "AG-11",
+      "query": "What is my portfolio concentration HHI?",
+      "expected_tools": [
+        "get_portfolio_risk"
+      ],
+      "actual_tools": [
+        "get_portfolio_risk"
+      ],
+      "tool_calls": [
+        {
+          "name": "get_portfolio_risk",
+          "args": {},
+          "id": "fc_3dd07dfb-ac13-47d4-a742-1c749a804ab8"
+        }
+      ],
+      "tool_selection_correct": true,
+      "tool_argument_failures": [],
+      "final_answer": "Your portfolio’s concentration HHI is 0.6177.",
+      "grounding": {
+        "status": "PASS",
+        "checks": [
+          {
+            "type": "number_path",
+            "passed": true,
+            "detail": "portfolio concentration HHI: expected 0.6177"
+          }
+        ],
+        "failures": [],
+        "ground_truth_source": "runtime_tool_result",
+        "ground_truth_tool": "get_portfolio_risk",
+        "ground_truth": {
+          "holding_count": 2,
+          "largest_holding": "BSE",
+          "largest_holding_weight_percentage": 74.26,
+          "concentration_hhi": 0.6177,
+          "interpretation": "higher values indicate more concentration",
+          "allocation": [
+            {
+              "trading_symbol": "BSE",
+              "weight_percentage": 74.26
+            },
+            {
+              "trading_symbol": "DATAPATTNS",
+              "weight_percentage": 25.74
+            }
+          ],
+          "allocation_basis": "live_market_value",
+          "portfolio_data_available": true,
+          "market_data_available": true,
+          "market_data_realtime": false,
+          "market_data_error": "Groww live market data unavailable; using Yahoo Finance fallback for 2 holding(s)."
+        }
+      },
+      "grounding_correct": true,
+      "overall": "PASS"
+    },
+    {
+      "id": "AG-12",
+      "query": "Which holding has the largest portfolio weight, and what percentage does it represent?",
+      "expected_tools": [
+        "get_portfolio_risk"
+      ],
+      "actual_tools": [
+        "get_portfolio_risk"
+      ],
+      "tool_calls": [
+        {
+          "name": "get_portfolio_risk",
+          "args": {},
+          "id": "fc_76502d7c-bdde-48a5-b0d6-936d8520e683"
+        }
+      ],
+      "tool_selection_correct": true,
+      "tool_argument_failures": [],
+      "final_answer": "The largest holding in your portfolio is BSE, and it makes up about seventy‑four point two six percent of the total.",
+      "grounding": {
+        "status": "PASS",
+        "checks": [
+          {
+            "type": "text_equals_path",
+            "passed": true,
+            "detail": "largest holding: expected mention of 'BSE'"
+          },
+          {
+            "type": "number_path",
+            "passed": true,
+            "detail": "largest holding weight: expected 74.26"
+          }
+        ],
+        "failures": [],
+        "ground_truth_source": "runtime_tool_result",
+        "ground_truth_tool": "get_portfolio_risk",
+        "ground_truth": {
+          "holding_count": 2,
+          "largest_holding": "BSE",
+          "largest_holding_weight_percentage": 74.26,
+          "concentration_hhi": 0.6177,
+          "interpretation": "higher values indicate more concentration",
+          "allocation": [
+            {
+              "trading_symbol": "BSE",
+              "weight_percentage": 74.26
+            },
+            {
+              "trading_symbol": "DATAPATTNS",
+              "weight_percentage": 25.74
+            }
+          ],
+          "allocation_basis": "live_market_value",
+          "portfolio_data_available": true,
+          "market_data_available": true,
+          "market_data_realtime": false,
+          "market_data_error": "Groww live market data unavailable; using Yahoo Finance fallback for 2 holding(s)."
+        }
+      },
+      "grounding_correct": true,
+      "overall": "PASS"
+    },
+    {
+      "id": "AG-13",
+      "query": "Are my portfolio prices real-time from Groww?",
+      "expected_tools": [
+        "get_portfolio_summary"
+      ],
+      "actual_tools": [
+        "get_portfolio_summary"
+      ],
+      "tool_calls": [
+        {
+          "name": "get_portfolio_summary",
+          "args": {},
+          "id": "fc_08758c2b-b98e-4a43-b382-4abab5e6ee14"
+        }
+      ],
+      "tool_selection_correct": true,
+      "tool_argument_failures": [],
+      "final_answer": "No. The prices aren’t coming from Grow w’s live feed – the system couldn’t get real‑time data and fell back to delayed Yahoo Finance quotes.",
+      "grounding": {
+        "status": "PASS",
+        "checks": [
+          {
+            "type": "boolean_text",
+            "passed": true,
+            "detail": "market_data_realtime: expected False"
+          },
+          {
+            "type": "text_path_any",
+            "passed": true,
+            "detail": "price_source: expected one of ['yahoo_fallback', 'mixed', 'unavailable'], got 'yahoo fallback'"
+          },
+          {
+            "type": "text_contains_any",
+            "passed": true,
+            "detail": "answer should contain one of ['not real-time', 'not realtime', 'not live', 'delayed', 'fallback', 'delayed or unknown']"
+          }
+        ],
+        "failures": [],
+        "ground_truth_source": "runtime_tool_result",
+        "ground_truth_tool": "get_portfolio_summary",
+        "ground_truth": {
+          "holding_count": 2,
+          "portfolio_data_available": true,
+          "invested_value": 20469.9,
+          "current_value": 17424.9,
+          "profit_loss": -3045.0,
+          "profit_loss_percentage": -14.88,
+          "top_holding": "BSE",
+          "holdings": [
+            {
+              "trading_symbol": "BSE",
+              "quantity": 4.0,
+              "average_price": 4075.0,
+              "current_price": 3235.0,
+              "invested_value": 16300.0,
+              "current_value": 12940.0,
+              "profit_loss": -3360.0,
+              "profit_loss_percentage": -20.61,
+              "exchange_used": "NSE",
+              "tradable_exchanges": [
+                "NSE"
+              ],
+              "price_source": "yahoo_fallback",
+              "price_freshness": "delayed_or_unknown"
+            },
+            {
+              "trading_symbol": "DATAPATTNS",
+              "quantity": 1.0,
+              "average_price": 4169.9,
+              "current_price": 4484.8999,
+              "invested_value": 4169.9,
+              "current_value": 4484.9,
+              "profit_loss": 315.0,
+              "profit_loss_percentage": 7.55,
+              "exchange_used": "NSE",
+              "tradable_exchanges": [
+                "NSE",
+                "BSE"
+              ],
+              "price_source": "yahoo_fallback",
+              "price_freshness": "delayed_or_unknown"
+            }
+          ],
+          "allocation": [
+            {
+              "trading_symbol": "BSE",
+              "weight_percentage": 74.26
+            },
+            {
+              "trading_symbol": "DATAPATTNS",
+              "weight_percentage": 25.74
+            }
+          ],
+          "currency": "INR",
+          "market_data_available": true,
+          "market_data_realtime": false,
+          "valuation_basis": "fallback_market_value",
+          "price_source": "yahoo_fallback",
+          "price_freshness": "delayed_or_unknown",
+          "market_data_error": "Groww live market data unavailable; using Yahoo Finance fallback for 2 holding(s)."
+        }
+      },
+      "grounding_correct": true,
+      "overall": "PASS"
+    },
+    {
+      "id": "AG-14",
+      "query": "What is the current price of Infosys?",
+      "expected_tools": [
+        "yahoo_get_quote"
+      ],
+      "actual_tools": [
+        "yahoo_get_quote"
+      ],
+      "tool_calls": [
+        {
+          "name": "yahoo_get_quote",
+          "args": {
+            "ticker": "INFY.NS"
+          },
+          "id": "fc_41fdf042-7882-4c8f-b521-34291654b051"
+        }
+      ],
+      "tool_selection_correct": true,
+      "tool_argument_failures": [],
+      "final_answer": "Infosys is trading at one thousand twenty‑nine point four rupees.",
+      "grounding": {
+        "status": "PASS",
+        "checks": [
+          {
+            "type": "number_path",
+            "passed": true,
+            "detail": "Infosys latest price: expected 1029.4"
+          },
+          {
+            "type": "text_path_any",
+            "passed": true,
+            "detail": "ticker: expected one of ['INFY.NS', 'INFY'], got 'infy.ns'"
+          }
+        ],
+        "failures": [],
+        "ground_truth_source": "runtime_tool_result",
+        "ground_truth_tool": "yahoo_get_quote",
+        "ground_truth": {
+          "ticker": "INFY.NS",
+          "latest_price": 1029.4,
+          "previous_close": 1038.5,
+          "change": -9.1,
+          "change_percentage": -0.8763,
+          "currency": "INR",
+          "data_timestamp": "2026-09-23T15:14:59"
+        }
+      },
+      "grounding_correct": true,
+      "overall": "PASS"
+    },
+    {
+      "id": "AG-15",
+      "query": "What are the fifty-day moving average and RSI of Infosys?",
+      "expected_tools": [
+        "yahoo_get_technical_analysis"
+      ],
+      "actual_tools": [
+        "yahoo_get_technical_analysis"
+      ],
+      "tool_calls": [
+        {
+          "name": "yahoo_get_technical_analysis",
+          "args": {
+            "period": "6mo",
+            "ticker": "INFY.NS"
+          },
+          "id": "fc_85141314-6396-4182-9d0d-50e3b8e64864"
+        }
+      ],
+      "tool_selection_correct": true,
+      "tool_argument_failures": [],
+      "final_answer": "Infosys’s fifty‑day simple moving average is about one thousand one hundred ten point six six eight, and its 14‑day RSI is roughly twenty‑one point five eight three.",
+      "grounding": {
+        "status": "PASS",
+        "checks": [
+          {
+            "type": "number_path",
+            "passed": true,
+            "detail": "Infosys SMA50: expected 1110.668"
+          },
+          {
+            "type": "number_path",
+            "passed": true,
+            "detail": "Infosys RSI14: expected 21.5827"
+          }
+        ],
+        "failures": [],
+        "ground_truth_source": "runtime_tool_result",
+        "ground_truth_tool": "yahoo_get_technical_analysis",
+        "ground_truth": {
+          "ticker": "INFY.NS",
+          "latest_close": 1029.4,
+          "sma20": 1084.81,
+          "sma50": 1110.668,
+          "rsi14": 21.5827,
+          "trend_signal": "price_below_20_and_50_day_averages",
+          "period": "6mo"
+        }
+      },
+      "grounding_correct": true,
+      "overall": "PASS"
+    },
+    {
+      "id": "AG-16",
+      "query": "What is the latest news about Infosys?",
+      "expected_tools": [
+        "yahoo_get_news"
+      ],
+      "actual_tools": [
+        "yahoo_get_news"
+      ],
+      "tool_calls": [
+        {
+          "name": "yahoo_get_news",
+          "args": {
+            "count": 5,
+            "ticker": "INFY.NS"
+          },
+          "id": "fc_1caa30ce-9dac-4fb2-a722-43db9c8967eb"
+        }
+      ],
+      "tool_selection_correct": true,
+      "tool_argument_failures": [],
+      "final_answer": "Infosys recently landed a brake‑maker client while its overall growth remains modest, according to Insider Monkey on September 19. Bloomberg noted that India’s “Silicon Valley” is feeling strain from its own expansion, also on September 19. TechCrunch reported that a former Infosys chief’s AI startup secured an additional $53 million on September 16. Those are the latest headlines.",
+      "grounding": {
+        "status": "PASS",
+        "checks": [
+          {
+            "type": "news_support",
+            "passed": true,
+            "detail": "news answer cites returned publisher 'insider monkey'"
+          }
+        ],
+        "failures": [],
+        "ground_truth_source": "runtime_tool_result",
+        "ground_truth_tool": "yahoo_get_news",
+        "ground_truth": [
+          {
+            "title": "Infosys (INFY) Lands a Brake Maker as Growth Stays in Low Gear",
+            "publisher": "Insider Monkey",
+            "published": "2026-09-19T19:47:47Z",
+            "url": "https://finance.yahoo.com/technology/ai/articles/infosys-infy-lands-brake-maker-194747627.html"
+          },
+          {
+            "title": "India's Silicon Valley Is Straining Under Its Own Growth",
+            "publisher": "Bloomberg",
+            "published": "2026-09-19T14:08:16Z",
+            "url": "https://finance.yahoo.com/video/indias-silicon-valley-straining-under-140816187.html"
+          },
+          {
+            "title": "Former Infosys chief’s AI startup nabs another $53M",
+            "publisher": "TechCrunch",
+            "published": "2026-09-16T13:00:00Z",
+            "url": "https://finance.yahoo.com/technology/ai/articles/former-infosys-chief-ai-startup-130000046.html"
+          },
+          {
+            "title": "Asian Equities Traded in the US as American Depositary Receipts Fall Sharply in Monday Trading",
+            "publisher": "MT Newswires",
+            "published": "2026-09-14T14:39:01Z",
+            "url": "https://finance.yahoo.com/markets/world-indices/articles/asian-equities-traded-us-american-143901161.html"
+          },
+          {
+            "title": "Trump administration proposes axing grace period for H-1B visa holders after job loss",
+            "publisher": "Reuters",
+            "published": "2026-09-10T20:50:17Z",
+            "url": "https://finance.yahoo.com/news/trump-administration-proposes-waiving-grace-152322715.html"
+          }
+        ]
+      },
+      "grounding_correct": true,
+      "overall": "PASS"
+    },
+    {
+      "id": "AG-17",
+      "query": "What is the latest NAV of HDFC Flexi Cap Fund?",
+      "expected_tools": [
+        "amfi_get_latest_nav"
+      ],
+      "actual_tools": [
+        "amfi_get_latest_nav"
+      ],
+      "tool_calls": [
+        {
+          "name": "amfi_get_latest_nav",
+          "args": {
+            "scheme_query": "HDFC Flexi Cap Fund"
+          },
+          "id": "fc_160fe056-9efd-42d1-b575-1c1dd2e73d6c"
+        }
+      ],
+      "tool_selection_correct": true,
+      "tool_argument_failures": [],
+      "final_answer": "The latest NAV for the HDFC Flexi Cap Fund Direct‑Plan Growth option is two thousand two hundred fifty point four two, dated 23 September 2026.",
+      "grounding": {
+        "status": "PASS",
+        "checks": [
+          {
+            "type": "amfi_latest_result",
+            "passed": true,
+            "detail": "AMFI expected HDFC Flexi Cap Fund NAV 2250.42 dated 23-Sep-2026"
+          }
+        ],
+        "failures": [],
+        "ground_truth_source": "runtime_tool_result",
+        "ground_truth_tool": "amfi_get_latest_nav",
+        "ground_truth": {
+          "results": [
+            {
+              "scheme_code": "118955",
+              "isin_growth_or_payout": "INF179K01UT0",
+              "isin_reinvestment": "-",
+              "scheme_name": "HDFC Flexi Cap Fund",
+              "plan": "Direct Plan",
+              "option": "Growth Option",
+              "nav": 2250.42,
+              "date": "23-Sep-2026",
+              "amc": null,
+              "category": null
+            },
+            {
+              "scheme_code": "101762",
+              "isin_growth_or_payout": "INF179K01608",
+              "isin_reinvestment": "-",
+              "scheme_name": "HDFC Flexi Cap Fund",
+              "plan": "Regular Plan",
+              "option": "Growth Option",
+              "nav": 2042.755,
+              "date": "23-Sep-2026",
+              "amc": null,
+              "category": null
+            },
+            {
+              "scheme_code": "118954",
+              "isin_growth_or_payout": "INF179K01VL5",
+              "isin_reinvestment": "INF179K01VM3",
+              "scheme_name": "HDFC Flexi Cap Fund",
+              "plan": "Direct Plan",
+              "option": "IDCW Option",
+              "nav": 90.993,
+              "date": "23-Sep-2026",
+              "amc": null,
+              "category": null
+            },
+            {
+              "scheme_code": "101763",
+              "isin_growth_or_payout": "INF179K01582",
+              "isin_reinvestment": "INF179K01590",
+              "scheme_name": "HDFC Flexi Cap Fund",
+              "plan": "Regular Plan",
+              "option": "IDCW Option",
+              "nav": 73.816,
+              "date": "23-Sep-2026",
+              "amc": null,
+              "category": null
+            }
+          ],
+          "count": 4,
+          "found": true,
+          "scheme_query": "HDFC Flexi Cap Fund"
+        }
+      },
+      "grounding_correct": true,
+      "overall": "PASS"
+    },
+    {
+      "id": "AG-18",
+      "query": "Convert 500 USD to INR.",
+      "expected_tools": [
+        "convert_currency"
+      ],
+      "actual_tools": [
+        "convert_currency"
+      ],
+      "tool_calls": [
+        {
+          "name": "convert_currency",
+          "args": {
+            "amount": 500,
+            "base_currency": "USD",
+            "quote_currency": "INR"
+          },
+          "id": "fc_6f8a3c68-5166-47d0-a458-d39b9468eb10"
+        }
+      ],
+      "tool_selection_correct": true,
+      "tool_argument_failures": [],
+      "final_answer": "Five hundred US dollars converts to about forty‑seven thousand eight hundred thirty Indian rupees.",
+      "grounding": {
+        "status": "PASS",
+        "checks": [
+          {
+            "type": "number_path",
+            "passed": true,
+            "detail": "converted USD to INR amount: expected 47830.0"
+          },
+          {
+            "type": "text_contains_any",
+            "passed": true,
+            "detail": "answer should contain one of ['inr', 'rupee', 'rupees']"
+          }
+        ],
+        "failures": [],
+        "ground_truth_source": "runtime_tool_result",
+        "ground_truth_tool": "convert_currency",
+        "ground_truth": {
+          "date": "2026-09-23",
+          "base": "USD",
+          "quote": "INR",
+          "rate": 95.66,
+          "amount": 500.0,
+          "converted_amount": 47830.0
+        }
+      },
+      "grounding_correct": true,
+      "overall": "PASS"
+    },
+    {
+      "id": "AG-19",
+      "query": "Is the NSE open right now?",
+      "expected_tools": [
+        "get_nse_market_status"
+      ],
+      "actual_tools": [
+        "get_nse_market_status"
+      ],
+      "tool_calls": [
+        {
+          "name": "get_nse_market_status",
+          "args": {},
+          "id": "fc_36bbeefc-5dc0-47d7-848d-97f949bca4d4"
+        }
+      ],
+      "tool_selection_correct": true,
+      "tool_argument_failures": [],
+      "final_answer": "The NSE equity market is currently closed. It will reopen for its regular session at nine fifteen Indian Standard Time.",
+      "grounding": {
+        "status": "PASS",
+        "checks": [
+          {
+            "type": "market_status_text",
+            "passed": true,
+            "detail": "NSE open=False"
+          }
+        ],
+        "failures": [],
+        "ground_truth_source": "runtime_tool_result",
+        "ground_truth_tool": "get_nse_market_status",
+        "ground_truth": {
+          "exchange": "NSE",
+          "segment": "equity",
+          "open": false,
+          "reason": "outside_regular_session",
+          "regular_session": "09:15-15:30 IST",
+          "datetime_ist": "2026-09-24T03:11:15.589150+05:30"
+        }
+      },
+      "grounding_correct": true,
+      "overall": "PASS"
+    },
+    {
+      "id": "AG-20",
+      "query": "Which holding is contributing the most to my portfolio loss?",
+      "expected_tools": [
+        "get_portfolio_summary"
+      ],
+      "actual_tools": [
+        "get_portfolio_summary"
+      ],
+      "tool_calls": [
+        {
+          "name": "get_portfolio_summary",
+          "args": {},
+          "id": "fc_f3c5a4e4-55b2-4d32-9cb7-ea012ec9e4ef"
+        }
+      ],
+      "tool_selection_correct": true,
+      "tool_argument_failures": [],
+      "final_answer": "Your biggest loss comes from the BSE holding, which is down about ‑3,360 rupees.",
+      "grounding": {
+        "status": "PASS",
+        "checks": [
+          {
+            "type": "largest_loss_holding",
+            "passed": true,
+            "detail": "largest loss should be BSE at -3360.0"
+          }
+        ],
+        "failures": [],
+        "ground_truth_source": "runtime_tool_result",
+        "ground_truth_tool": "get_portfolio_summary",
+        "ground_truth": {
+          "holding_count": 2,
+          "portfolio_data_available": true,
+          "invested_value": 20469.9,
+          "current_value": 17424.9,
+          "profit_loss": -3045.0,
+          "profit_loss_percentage": -14.88,
+          "top_holding": "BSE",
+          "holdings": [
+            {
+              "trading_symbol": "BSE",
+              "quantity": 4.0,
+              "average_price": 4075.0,
+              "current_price": 3235.0,
+              "invested_value": 16300.0,
+              "current_value": 12940.0,
+              "profit_loss": -3360.0,
+              "profit_loss_percentage": -20.61,
+              "exchange_used": "NSE",
+              "tradable_exchanges": [
+                "NSE"
+              ],
+              "price_source": "yahoo_fallback",
+              "price_freshness": "delayed_or_unknown"
+            },
+            {
+              "trading_symbol": "DATAPATTNS",
+              "quantity": 1.0,
+              "average_price": 4169.9,
+              "current_price": 4484.8999,
+              "invested_value": 4169.9,
+              "current_value": 4484.9,
+              "profit_loss": 315.0,
+              "profit_loss_percentage": 7.55,
+              "exchange_used": "NSE",
+              "tradable_exchanges": [
+                "NSE",
+                "BSE"
+              ],
+              "price_source": "yahoo_fallback",
+              "price_freshness": "delayed_or_unknown"
+            }
+          ],
+          "allocation": [
+            {
+              "trading_symbol": "BSE",
+              "weight_percentage": 74.26
+            },
+            {
+              "trading_symbol": "DATAPATTNS",
+              "weight_percentage": 25.74
+            }
+          ],
+          "currency": "INR",
+          "market_data_available": true,
+          "market_data_realtime": false,
+          "valuation_basis": "fallback_market_value",
+          "price_source": "yahoo_fallback",
+          "price_freshness": "delayed_or_unknown",
+          "market_data_error": "Groww live market data unavailable; using Yahoo Finance fallback for 2 holding(s)."
+        }
+      },
+      "grounding_correct": true,
+      "overall": "PASS"
+    }
+  ]
+}

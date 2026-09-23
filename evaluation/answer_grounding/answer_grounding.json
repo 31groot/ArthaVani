@@ -1,0 +1,527 @@
+[
+  {
+    "id": "AG-01",
+    "query": "How much have I invested?",
+    "expected_tools": [
+      "get_portfolio_summary"
+    ],
+    "tool_match": "sequence",
+    "grounding": {
+      "tool": "get_portfolio_summary",
+      "checks": [
+        {
+          "type": "number_path",
+          "path": "invested_value",
+          "label": "invested value",
+          "tolerance": 0.01
+        }
+      ]
+    }
+  },
+  {
+    "id": "AG-02",
+    "query": "What is my portfolio worth right now?",
+    "expected_tools": [
+      "get_portfolio_summary"
+    ],
+    "tool_match": "sequence",
+    "grounding": {
+      "tool": "get_portfolio_summary",
+      "checks": [
+        {
+          "type": "number_path",
+          "path": "current_value",
+          "label": "current portfolio value",
+          "tolerance": 0.01
+        }
+      ]
+    }
+  },
+  {
+    "id": "AG-03",
+    "query": "What is my total profit or loss?",
+    "expected_tools": [
+      "get_portfolio_summary"
+    ],
+    "tool_match": "sequence",
+    "grounding": {
+      "tool": "get_portfolio_summary",
+      "checks": [
+        {
+          "type": "number_path",
+          "path": "profit_loss",
+          "label": "total profit or loss",
+          "tolerance": 0.01
+        },
+        {
+          "type": "sentiment",
+          "path": "profit_loss",
+          "negative_words": [
+            "loss",
+            "negative",
+            "down",
+            "decline",
+            "minus"
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "id": "AG-04",
+    "query": "What is my total P&L percentage?",
+    "expected_tools": [
+      "get_portfolio_summary"
+    ],
+    "tool_match": "sequence",
+    "grounding": {
+      "tool": "get_portfolio_summary",
+      "checks": [
+        {
+          "type": "number_path",
+          "path": "profit_loss_percentage",
+          "label": "total P&L percentage",
+          "tolerance": 0.01
+        },
+        {
+          "type": "sentiment",
+          "path": "profit_loss_percentage",
+          "negative_words": [
+            "loss",
+            "negative",
+            "down",
+            "minus"
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "id": "AG-05",
+    "query": "How many BSE shares do I own?",
+    "expected_tools": [
+      "get_portfolio_summary"
+    ],
+    "tool_match": "sequence",
+    "grounding": {
+      "tool": "get_portfolio_summary",
+      "checks": [
+        {
+          "type": "list_number",
+          "path": "holdings",
+          "match": {
+            "trading_symbol": "BSE"
+          },
+          "value_path": "quantity",
+          "label": "BSE share count",
+          "tolerance": 0.01
+        },
+        {
+          "type": "text_contains",
+          "values": [
+            "bse"
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "id": "AG-06",
+    "query": "What is my BSE average purchase price?",
+    "expected_tools": [
+      "get_portfolio_summary"
+    ],
+    "tool_match": "sequence",
+    "grounding": {
+      "tool": "get_portfolio_summary",
+      "checks": [
+        {
+          "type": "list_number",
+          "path": "holdings",
+          "match": {
+            "trading_symbol": "BSE"
+          },
+          "value_path": "average_price",
+          "label": "BSE average purchase price",
+          "tolerance": 0.01
+        },
+        {
+          "type": "text_contains",
+          "values": [
+            "bse"
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "id": "AG-07",
+    "query": "What is my BSE holding worth now?",
+    "expected_tools": [
+      "get_portfolio_summary"
+    ],
+    "tool_match": "sequence",
+    "grounding": {
+      "tool": "get_portfolio_summary",
+      "checks": [
+        {
+          "type": "list_number",
+          "path": "holdings",
+          "match": {
+            "trading_symbol": "BSE"
+          },
+          "value_path": "current_value",
+          "label": "BSE current value",
+          "tolerance": 0.01
+        },
+        {
+          "type": "text_contains",
+          "values": [
+            "bse"
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "id": "AG-08",
+    "query": "How is my DATAPATTNS holding performing?",
+    "expected_tools": [
+      "get_portfolio_summary"
+    ],
+    "tool_match": "sequence",
+    "grounding": {
+      "tool": "get_portfolio_summary",
+      "checks": [
+        {
+          "type": "list_number",
+          "path": "holdings",
+          "match": {
+            "trading_symbol": "DATAPATTNS"
+          },
+          "value_path": "profit_loss",
+          "label": "DATAPATTNS P&L amount",
+          "tolerance": 1.0
+        },
+        {
+          "type": "list_number",
+          "path": "holdings",
+          "match": {
+            "trading_symbol": "DATAPATTNS"
+          },
+          "value_path": "profit_loss_percentage",
+          "label": "DATAPATTNS P&L percentage",
+          "tolerance": 0.1
+        },
+        {
+          "type": "text_contains",
+          "values": [
+            "datapattns"
+          ]
+        }
+      ]
+    },
+    "grounding_note": "For a performance question, require the holding name plus the current P&L amount and/or percentage; do not require optional current/average price context. Percentage tolerance is 0.10 percentage points to allow normal voice rounding."
+  },
+  {
+    "id": "AG-09",
+    "query": "What percentage of my portfolio is BSE?",
+    "expected_tools": [
+      "get_portfolio_risk"
+    ],
+    "tool_match": "sequence",
+    "grounding": {
+      "tool": "get_portfolio_risk",
+      "checks": [
+        {
+          "type": "allocation_number",
+          "match": {
+            "trading_symbol": "BSE"
+          },
+          "value_path": "weight_percentage",
+          "label": "BSE portfolio weight",
+          "tolerance": 0.01
+        },
+        {
+          "type": "text_contains",
+          "values": [
+            "bse"
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "id": "AG-10",
+    "query": "What percentage of my portfolio is DATAPATTNS?",
+    "expected_tools": [
+      "get_portfolio_risk"
+    ],
+    "tool_match": "sequence",
+    "grounding": {
+      "tool": "get_portfolio_risk",
+      "checks": [
+        {
+          "type": "allocation_number",
+          "match": {
+            "trading_symbol": "DATAPATTNS"
+          },
+          "value_path": "weight_percentage",
+          "label": "DATAPATTNS portfolio weight",
+          "tolerance": 0.01
+        },
+        {
+          "type": "text_contains",
+          "values": [
+            "datapattns"
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "id": "AG-11",
+    "query": "What is my portfolio concentration HHI?",
+    "expected_tools": [
+      "get_portfolio_risk"
+    ],
+    "tool_match": "sequence",
+    "grounding": {
+      "tool": "get_portfolio_risk",
+      "checks": [
+        {
+          "type": "number_path",
+          "path": "concentration_hhi",
+          "label": "portfolio concentration HHI",
+          "tolerance": 0.0001
+        }
+      ]
+    }
+  },
+  {
+    "id": "AG-12",
+    "query": "Which holding has the largest portfolio weight, and what percentage does it represent?",
+    "expected_tools": [
+      "get_portfolio_risk"
+    ],
+    "tool_match": "sequence",
+    "grounding": {
+      "tool": "get_portfolio_risk",
+      "checks": [
+        {
+          "type": "text_equals_path",
+          "path": "largest_holding",
+          "label": "largest holding"
+        },
+        {
+          "type": "number_path",
+          "path": "largest_holding_weight_percentage",
+          "label": "largest holding weight",
+          "tolerance": 0.01
+        }
+      ]
+    }
+  },
+  {
+    "id": "AG-13",
+    "query": "Are my portfolio prices real-time from Groww?",
+    "expected_tools": [
+      "get_portfolio_summary"
+    ],
+    "tool_match": "sequence",
+    "grounding": {
+      "tool": "get_portfolio_summary",
+      "checks": [
+        {
+          "type": "boolean_text",
+          "path": "market_data_realtime",
+          "expected": false
+        },
+        {
+          "type": "text_path_any",
+          "path": "price_source",
+          "values": [
+            "yahoo_fallback",
+            "mixed",
+            "unavailable"
+          ]
+        },
+        {
+          "type": "text_contains_any",
+          "values": [
+            "not real-time",
+            "not realtime",
+            "not live",
+            "delayed",
+            "fallback",
+            "delayed or unknown"
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "id": "AG-14",
+    "query": "What is the current price of Infosys?",
+    "expected_tools": [
+      "yahoo_get_quote"
+    ],
+    "tool_match": "sequence",
+    "expected_args": {
+      "ticker": "INFY.NS"
+    },
+    "grounding": {
+      "tool": "yahoo_get_quote",
+      "checks": [
+        {
+          "type": "number_path",
+          "path": "latest_price",
+          "label": "Infosys latest price",
+          "tolerance": 0.01
+        },
+        {
+          "type": "text_path_any",
+          "path": "ticker",
+          "values": [
+            "INFY.NS",
+            "INFY"
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "id": "AG-15",
+    "query": "What are the fifty-day moving average and RSI of Infosys?",
+    "expected_tools": [
+      "yahoo_get_technical_analysis"
+    ],
+    "tool_match": "sequence",
+    "expected_args": {
+      "ticker": "INFY.NS"
+    },
+    "grounding": {
+      "tool": "yahoo_get_technical_analysis",
+      "checks": [
+        {
+          "type": "number_path",
+          "path": "sma50",
+          "label": "Infosys SMA50",
+          "tolerance": 0.01
+        },
+        {
+          "type": "number_path",
+          "path": "rsi14",
+          "label": "Infosys RSI14",
+          "tolerance": 0.01
+        }
+      ]
+    }
+  },
+  {
+    "id": "AG-16",
+    "query": "What is the latest news about Infosys?",
+    "expected_tools": [
+      "yahoo_get_news"
+    ],
+    "tool_match": "sequence",
+    "expected_args": {
+      "ticker": "INFY.NS"
+    },
+    "grounding": {
+      "tool": "yahoo_get_news",
+      "checks": [
+        {
+          "type": "news_support"
+        }
+      ]
+    }
+  },
+  {
+    "id": "AG-17",
+    "query": "What is the latest NAV of HDFC Flexi Cap Fund?",
+    "expected_tools": [
+      "amfi_get_latest_nav"
+    ],
+    "tool_match": "sequence",
+    "expected_args_contains": {
+      "scheme_query": "hdfc flexi cap"
+    },
+    "grounding": {
+      "tool": "amfi_get_latest_nav",
+      "checks": [
+        {
+          "type": "amfi_latest_result",
+          "name_contains": "hdfc flexi cap",
+          "label": "HDFC Flexi Cap latest NAV"
+        }
+      ]
+    }
+  },
+  {
+    "id": "AG-18",
+    "query": "Convert 500 USD to INR.",
+    "expected_tools": [
+      "convert_currency"
+    ],
+    "tool_match": "sequence",
+    "expected_args": {
+      "amount": 500,
+      "base_currency": "USD",
+      "quote_currency": "INR"
+    },
+    "grounding": {
+      "tool": "convert_currency",
+      "checks": [
+        {
+          "type": "number_path",
+          "path": "converted_amount",
+          "label": "converted USD to INR amount",
+          "tolerance": 0.01
+        },
+        {
+          "type": "text_contains_any",
+          "values": [
+            "inr",
+            "rupee",
+            "rupees"
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "id": "AG-19",
+    "query": "Is the NSE open right now?",
+    "expected_tools": [
+      "get_nse_market_status"
+    ],
+    "tool_match": "sequence",
+    "grounding": {
+      "tool": "get_nse_market_status",
+      "checks": [
+        {
+          "type": "market_status_text",
+          "path": "open"
+        }
+      ]
+    }
+  },
+  {
+    "id": "AG-20",
+    "query": "Which holding is contributing the most to my portfolio loss?",
+    "expected_tools": [
+      "get_portfolio_summary"
+    ],
+    "tool_match": "sequence",
+    "grounding": {
+      "tool": "get_portfolio_summary",
+      "checks": [
+        {
+          "type": "largest_loss_holding",
+          "label": "largest loss holding"
+        }
+      ]
+    }
+  }
+]

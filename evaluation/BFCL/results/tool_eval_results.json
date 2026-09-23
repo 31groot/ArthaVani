@@ -1,0 +1,802 @@
+{
+  "summary": {
+    "total_cases": 30,
+    "valid_cases": 30,
+    "passed": 30,
+    "failed": 0,
+    "errors": 0,
+    "tool_selection_accuracy_percent": 100.0,
+    "error_breakdown": {},
+    "case_delay_seconds": 20.0
+  },
+  "results": [
+    {
+      "id": "AV-01",
+      "status": "PASS",
+      "type": "simple",
+      "query": "Summarize my portfolio.",
+      "turns": null,
+      "expected_tools": [
+        "get_portfolio_summary"
+      ],
+      "actual_tools": [
+        "get_portfolio_summary"
+      ],
+      "tool_calls": [
+        {
+          "name": "get_portfolio_summary",
+          "args": {},
+          "id": "fc_4667f584-a456-4d5a-ba79-726390c56720"
+        }
+      ],
+      "tool_selection_correct": true,
+      "final_answer": "Your portfolio holds two stocks. You’ve invested twenty‑four thousand four hundred sixty‑nine rupees point nine, and the current value is seventeen thousand four hundred twenty‑four rupees point nine, giving a loss of three thousand forty‑five rupees, about fourteen point nine percent down. The biggest position is BSE, making up roughly seventy‑four percent of the portfolio, which is down twenty‑point‑six percent. The other holding, DATAPATTNS, accounts for about twenty‑six percent and is up seven point‑five percent. Note that the market prices are from a Yahoo fallback source and are not real‑time."
+    },
+    {
+      "id": "AV-02",
+      "status": "PASS",
+      "type": "simple",
+      "query": "What is my portfolio concentration HHI?",
+      "turns": null,
+      "expected_tools": [
+        "get_portfolio_risk"
+      ],
+      "actual_tools": [
+        "get_portfolio_risk"
+      ],
+      "tool_calls": [
+        {
+          "name": "get_portfolio_risk",
+          "args": {},
+          "id": "fc_b9b4e31c-3c8b-4dec-bbd5-1e6be85a2ef6"
+        }
+      ],
+      "tool_selection_correct": true,
+      "final_answer": "Your portfolio’s concentration HHI is 0.6177."
+    },
+    {
+      "id": "AV-03",
+      "status": "PASS",
+      "type": "simple",
+      "query": "What's the current price of Infosys?",
+      "turns": null,
+      "expected_tools": [
+        "yahoo_get_quote"
+      ],
+      "actual_tools": [
+        "yahoo_get_quote"
+      ],
+      "tool_calls": [
+        {
+          "name": "yahoo_get_quote",
+          "args": {
+            "ticker": "INFY.NS"
+          },
+          "id": "fc_6233e5a9-86fa-4acd-89db-8fdb3953c991"
+        }
+      ],
+      "tool_selection_correct": true,
+      "final_answer": "Infosys is trading at one thousand twenty‑nine point four rupees."
+    },
+    {
+      "id": "AV-04",
+      "status": "PASS",
+      "type": "simple",
+      "query": "Show me Infosys fundamentals.",
+      "turns": null,
+      "expected_tools": [
+        "yahoo_get_fundamentals"
+      ],
+      "actual_tools": [
+        "yahoo_get_fundamentals"
+      ],
+      "tool_calls": [
+        {
+          "name": "yahoo_get_fundamentals",
+          "args": {
+            "ticker": "INFY.NS"
+          },
+          "id": "fc_12ceae3c-5652-4bbe-bffc-2cb4fbf7160a"
+        }
+      ],
+      "tool_selection_correct": true,
+      "final_answer": "Infosys Limited has a market capitalisation of about four trillion one hundred thirty‑three billion three hundred seventy‑five million rupees. Its trailing price‑to‑earnings ratio is roughly thirteen point thirteen and the forward PE is about twelve point seven four. The price‑to‑book stands at four point forty‑eight, while the enterprise‑to‑EBITDA multiple is nine hundred twenty‑one point six. Profit margins are sixteen point four percent, return on equity is thirty‑two percent, revenue growth is two point nine percent and earnings growth is five point three percent. The dividend yield is four point eight six percent."
+    },
+    {
+      "id": "AV-05",
+      "status": "PASS",
+      "type": "simple",
+      "query": "Show me Infosys price history for the last month.",
+      "turns": null,
+      "expected_tools": [
+        "yahoo_get_history"
+      ],
+      "actual_tools": [
+        "yahoo_get_history"
+      ],
+      "tool_calls": [
+        {
+          "name": "yahoo_get_history",
+          "args": {
+            "period": "1mo",
+            "ticker": "INFY.NS"
+          },
+          "id": "fc_93028533-80c9-4ec0-9672-3d08b65e72fd"
+        }
+      ],
+      "tool_selection_correct": true,
+      "final_answer": "Here’s the Infosys price history for the past month, based on the latest data:\n\n- On August 24 the close was one thousand one hundred thirty rupees.  \n- August 25 closed at one thousand one hundred forty‑four rupees.  \n- August 26 closed at one thousand one hundred twenty rupees.  \n- August 27 closed at one thousand one hundred ten point eight rupees.  \n- August 28 closed at one thousand one hundred forty‑four rupees.  \n- August 31 closed at one thousand one hundred thirty‑three point eight rupees.  \n- September 1 closed at one thousand one hundred fifty‑six rupees.  \n- September 2 closed at one thousand one hundred forty rupees.  \n- September 3 closed at one thousand one hundred thirty point three rupees.  \n- September 4 closed at one thousand one hundred thirty rupees.  \n- September 7 closed at one thousand eighty‑seven point five rupees.  \n- September 8 closed at one thousand eighty‑two rupees.  \n- September 9 closed at one thousand thirty‑five rupees.  \n- September 10 closed at one thousand thirty‑six point five rupees.  \n- September 11 closed at one thousand thirty‑seven point seven rupees.  \n- September 14 showed no trading volume, with the price unchanged at one thousand thirty‑seven point seven rupees.  \n- September 15 closed at one thousand seventy‑seven rupees.  \n- September 16 closed at one thousand sixty rupees.  \n- September 17 closed at one thousand fifty‑eight point six rupees.  \n- September 18 closed at one thousand fifty‑one point four rupees.  \n- September 21 closed at one thousand thirty‑eight point five rupees.  \n- September 22 closed at one thousand twenty‑nine point four rupees.  \n- September 23 shows an open of one thousand twenty‑one point eight, high of one thousand twenty‑nine point four, low of one thousand fifteen point one, and the close price is not yet available.\n\nOverall, the stock moved from the low‑one‑thousand‑one‑hundred‑range in late August to a peak near one thousand one hundred fifty‑six on September 1, then trended downward, reaching the low‑one‑thousand‑twenty‑nine range by mid‑September."
+    },
+    {
+      "id": "AV-06",
+      "status": "PASS",
+      "type": "simple",
+      "query": "What is Infosys's 50-day moving average?",
+      "turns": null,
+      "expected_tools": [
+        "yahoo_get_technical_analysis"
+      ],
+      "actual_tools": [
+        "yahoo_get_technical_analysis"
+      ],
+      "tool_calls": [
+        {
+          "name": "yahoo_get_technical_analysis",
+          "args": {
+            "period": "6mo",
+            "ticker": "INFY.NS"
+          },
+          "id": "fc_3ec96d0e-16d0-4eb4-a799-5cd90bd47441"
+        }
+      ],
+      "tool_selection_correct": true,
+      "final_answer": "Infosys’s 50‑day moving average is 1,110.668 rupees."
+    },
+    {
+      "id": "AV-07",
+      "status": "PASS",
+      "type": "simple",
+      "query": "What's the latest news about TCS?",
+      "turns": null,
+      "expected_tools": [
+        "yahoo_get_news"
+      ],
+      "actual_tools": [
+        "yahoo_get_news"
+      ],
+      "tool_calls": [
+        {
+          "name": "yahoo_get_news",
+          "args": {
+            "count": 5,
+            "ticker": "TCS.NS"
+          },
+          "id": "fc_9daf1c27-0000-4de1-9b8b-10e0a9d2aab5"
+        }
+      ],
+      "tool_selection_correct": true,
+      "final_answer": "I’m not seeing any recent news items specifically about TCS in the latest feed."
+    },
+    {
+      "id": "AV-08",
+      "status": "PASS",
+      "type": "simple",
+      "query": "What is the latest NAV of HDFC Flexi Cap Fund?",
+      "turns": null,
+      "expected_tools": [
+        "amfi_get_latest_nav"
+      ],
+      "actual_tools": [
+        "amfi_get_latest_nav"
+      ],
+      "tool_calls": [
+        {
+          "name": "amfi_get_latest_nav",
+          "args": {
+            "scheme_query": "HDFC Flexi Cap Fund"
+          },
+          "id": "fc_ba164538-f578-4ca4-aebc-34f6d0b4bc99"
+        }
+      ],
+      "tool_selection_correct": true,
+      "final_answer": "The latest NAV for the HDFC Flexi Cap Fund Direct Plan – Growth Option is 2,250.42 as of 23 September 2026."
+    },
+    {
+      "id": "AV-09",
+      "status": "PASS",
+      "type": "simple",
+      "query": "Convert 100 USD to INR.",
+      "turns": null,
+      "expected_tools": [
+        "convert_currency"
+      ],
+      "actual_tools": [
+        "convert_currency"
+      ],
+      "tool_calls": [
+        {
+          "name": "convert_currency",
+          "args": {
+            "amount": 100,
+            "base_currency": "USD",
+            "quote_currency": "INR"
+          },
+          "id": "fc_5965265e-0c32-4201-9d41-b3ee5cba9712"
+        }
+      ],
+      "tool_selection_correct": true,
+      "final_answer": "One hundred US dollars equals about nine thousand five hundred sixty‑six Indian rupees."
+    },
+    {
+      "id": "AV-10",
+      "status": "PASS",
+      "type": "simple",
+      "query": "Is the NSE open right now?",
+      "turns": null,
+      "expected_tools": [
+        "get_nse_market_status"
+      ],
+      "actual_tools": [
+        "get_nse_market_status"
+      ],
+      "tool_calls": [
+        {
+          "name": "get_nse_market_status",
+          "args": {},
+          "id": "fc_8a09aee0-53f6-4748-bba4-7d32a55aa51e"
+        }
+      ],
+      "tool_selection_correct": true,
+      "final_answer": "No, the NSE equity market is currently closed—it’s outside the regular 9:15 am to 3:30 pm session."
+    },
+    {
+      "id": "AV-11",
+      "status": "PASS",
+      "type": "multiple_facts",
+      "query": "What's my portfolio worth and what's my total P&L?",
+      "turns": null,
+      "expected_tools": [
+        "get_portfolio_summary"
+      ],
+      "actual_tools": [
+        "get_portfolio_summary"
+      ],
+      "tool_calls": [
+        {
+          "name": "get_portfolio_summary",
+          "args": {},
+          "id": "fc_3ec8856b-5c8d-4785-b1ff-44081e78db33"
+        }
+      ],
+      "tool_selection_correct": true,
+      "final_answer": "Your portfolio is worth ₹ 17,424.9, and your total profit‑and‑loss is ‑₹ 3,045.0."
+    },
+    {
+      "id": "AV-12",
+      "status": "PASS",
+      "type": "multiple_facts",
+      "query": "What is my concentration HHI and which holding has the largest portfolio weight?",
+      "turns": null,
+      "expected_tools": [
+        "get_portfolio_risk"
+      ],
+      "actual_tools": [
+        "get_portfolio_risk"
+      ],
+      "tool_calls": [
+        {
+          "name": "get_portfolio_risk",
+          "args": {},
+          "id": "fc_f27cf451-93b9-4557-8aaf-9f8f5558c2d7"
+        }
+      ],
+      "tool_selection_correct": true,
+      "final_answer": "Your portfolio’s concentration HHI is 0.6177, and the biggest holding is BSE, which makes up about 74.26 percent of the allocation."
+    },
+    {
+      "id": "AV-13",
+      "status": "PASS",
+      "type": "parallel",
+      "query": "Tell me the current price of Infosys and its latest news.",
+      "turns": null,
+      "expected_tools": [
+        "yahoo_get_quote",
+        "yahoo_get_news"
+      ],
+      "actual_tools": [
+        "yahoo_get_quote",
+        "yahoo_get_news"
+      ],
+      "tool_calls": [
+        {
+          "name": "yahoo_get_quote",
+          "args": {
+            "ticker": "INFY.NS"
+          },
+          "id": "fc_f74959cd-3a16-4d9b-b83b-d7800e63826d"
+        },
+        {
+          "name": "yahoo_get_news",
+          "args": {
+            "count": 5,
+            "ticker": "INFY.NS"
+          },
+          "id": "fc_f7b5cb4e-dd8d-47d1-bd96-72bfe1eaabb2"
+        }
+      ],
+      "tool_selection_correct": true,
+      "final_answer": "Infosys is trading at one thousand twenty‑nine point four rupees, down about nine rupees or 0.88 percent from the previous close. Recent headlines include a story about Infosys landing a brake‑maker client as growth slows, a Bloomberg piece on India’s tech sector strain, and news that the former chief’s AI startup secured another $53 million."
+    },
+    {
+      "id": "AV-14",
+      "status": "PASS",
+      "type": "parallel",
+      "query": "Give me TCS fundamentals and the latest news.",
+      "turns": null,
+      "expected_tools": [
+        "yahoo_get_fundamentals",
+        "yahoo_get_news"
+      ],
+      "actual_tools": [
+        "yahoo_get_fundamentals",
+        "yahoo_get_news"
+      ],
+      "tool_calls": [
+        {
+          "name": "yahoo_get_fundamentals",
+          "args": {
+            "ticker": "TCS.NS"
+          },
+          "id": "fc_eff2e841-fefe-48a6-8737-12f51cbbee37"
+        },
+        {
+          "name": "yahoo_get_news",
+          "args": {
+            "count": 5,
+            "ticker": "TCS.NS"
+          },
+          "id": "fc_049aee12-7fdc-4fdc-9018-f9cfef7b2af2"
+        }
+      ],
+      "tool_selection_correct": true,
+      "final_answer": "Tata Consultancy Services (TCS) has a market capitalisation of about seven trillion five hundred sixty billion rupees. Its trailing price‑to‑earnings is roughly fifteen point two, while the forward PE is about twelve point eight. The price‑to‑book stands at six point nine, and the enterprise‑to‑EBITDA ratio is ten point zero. Profit margins are around eighteen point zero percent, return on equity about forty‑seven point four percent, revenue growth roughly thirteen point nine percent, earnings growth about four point six percent, and the dividend yield is three point zero nine percent.\n\nRecent headlines include: “Becoming ‘AI native’ might not be as profitable as you think. Unless your company does it right” from FastCompany on September twenty‑first; a Reuters piece on September tenth about the Trump administration proposing to end the grace period for H‑1B visa holders after job loss; an Insider Monkey article on September third discussing Rezolve’s revenue surge; a Stocktwits note on September second about RZLV stock facing its worst week since June; and a Moby summary of Rezolve AI PLC’s Q2 2026 earnings call on September first."
+    },
+    {
+      "id": "AV-15",
+      "status": "PASS",
+      "type": "parallel",
+      "query": "What's Infosys's current price and 50-day moving average?",
+      "turns": null,
+      "expected_tools": [
+        "yahoo_get_quote",
+        "yahoo_get_technical_analysis"
+      ],
+      "actual_tools": [
+        "yahoo_get_quote",
+        "yahoo_get_technical_analysis"
+      ],
+      "tool_calls": [
+        {
+          "name": "yahoo_get_quote",
+          "args": {
+            "ticker": "INFY.NS"
+          },
+          "id": "fc_7488462b-e87f-4ffa-97ba-efd858fa569d"
+        },
+        {
+          "name": "yahoo_get_technical_analysis",
+          "args": {
+            "period": "6mo",
+            "ticker": "INFY.NS"
+          },
+          "id": "fc_9f01fb01-718d-4a11-9ecb-bcd92bb84e41"
+        }
+      ],
+      "tool_selection_correct": true,
+      "final_answer": "Infosys is trading at one thousand twenty‑nine point four rupees, and its 50‑day simple moving average is about one thousand one hundred ten point seven rupees."
+    },
+    {
+      "id": "AV-16",
+      "status": "PASS",
+      "type": "parallel",
+      "query": "Tell me my portfolio value and whether the NSE is currently open.",
+      "turns": null,
+      "expected_tools": [
+        "get_portfolio_summary",
+        "get_nse_market_status"
+      ],
+      "actual_tools": [
+        "get_portfolio_summary",
+        "get_nse_market_status"
+      ],
+      "tool_calls": [
+        {
+          "name": "get_portfolio_summary",
+          "args": {},
+          "id": "fc_6e15388a-1baa-4119-8c35-d7026ec92919"
+        },
+        {
+          "name": "get_nse_market_status",
+          "args": {},
+          "id": "fc_611b1d3c-2521-4b0f-818c-1a6d16d7a742"
+        }
+      ],
+      "tool_selection_correct": true,
+      "final_answer": "Your portfolio’s current value is ₹ 17,424.9, and the NSE equity market is closed right now."
+    },
+    {
+      "id": "AV-17",
+      "status": "PASS",
+      "type": "parallel",
+      "query": "What is TCS's current price, its RSI, and its latest news?",
+      "turns": null,
+      "expected_tools": [
+        "yahoo_get_quote",
+        "yahoo_get_technical_analysis",
+        "yahoo_get_news"
+      ],
+      "actual_tools": [
+        "yahoo_get_quote",
+        "yahoo_get_technical_analysis",
+        "yahoo_get_news"
+      ],
+      "tool_calls": [
+        {
+          "name": "yahoo_get_quote",
+          "args": {
+            "ticker": "TCS.NS"
+          },
+          "id": "fc_e944c185-2571-4e36-ae80-2db390f30616"
+        },
+        {
+          "name": "yahoo_get_technical_analysis",
+          "args": {
+            "ticker": "TCS.NS"
+          },
+          "id": "fc_501564b0-b3e9-4fcb-9e68-dfdf148d5ae0"
+        },
+        {
+          "name": "yahoo_get_news",
+          "args": {
+            "count": 5,
+            "ticker": "TCS.NS"
+          },
+          "id": "fc_6a688244-933e-4fe8-b2c9-ed9bf00f35fe"
+        }
+      ],
+      "tool_selection_correct": true,
+      "final_answer": "TCS is trading at two thousand one hundred five rupees, its 14‑day RSI is nineteen point one, and the latest headline is “Becoming ‘AI native’ might not be as profitable as you think. Unless your company does it right” from FastCompany, published on September twenty‑first."
+    },
+    {
+      "id": "AV-18",
+      "status": "PASS",
+      "type": "parallel",
+      "query": "How much is 500 USD in INR, and is the NSE open?",
+      "turns": null,
+      "expected_tools": [
+        "convert_currency",
+        "get_nse_market_status"
+      ],
+      "actual_tools": [
+        "convert_currency",
+        "get_nse_market_status"
+      ],
+      "tool_calls": [
+        {
+          "name": "convert_currency",
+          "args": {
+            "amount": 500,
+            "base_currency": "USD",
+            "quote_currency": "INR"
+          },
+          "id": "fc_aa8538a0-79ba-4c22-a4ad-627f525d11eb"
+        },
+        {
+          "name": "get_nse_market_status",
+          "args": {},
+          "id": "fc_59c51319-3f3a-4f15-94cd-3559d0d18657"
+        }
+      ],
+      "tool_selection_correct": true,
+      "final_answer": "Five hundred US dollars converts to about forty‑seven thousand eight hundred thirty Indian rupees. The NSE equity market is currently closed."
+    },
+    {
+      "id": "AV-19",
+      "status": "PASS",
+      "type": "state_change",
+      "query": "Add a price alert for Infosys when it rises above 10000 rupees.",
+      "turns": null,
+      "expected_tools": [
+        "watchlist_add"
+      ],
+      "actual_tools": [
+        "watchlist_add"
+      ],
+      "tool_calls": [
+        {
+          "name": "watchlist_add",
+          "args": {
+            "condition": "above",
+            "target_price": 10000,
+            "ticker": "INFY.NS"
+          },
+          "id": "fc_94cf2dbc-ed07-4264-bf29-bc637fd608dc"
+        }
+      ],
+      "tool_selection_correct": true,
+      "final_answer": "Your price alert for Infosys above ten thousand rupees has been set."
+    },
+    {
+      "id": "AV-20",
+      "status": "PASS",
+      "type": "state",
+      "query": "List my active price alerts.",
+      "turns": null,
+      "expected_tools": [
+        "watchlist_list"
+      ],
+      "actual_tools": [
+        "watchlist_list"
+      ],
+      "tool_calls": [
+        {
+          "name": "watchlist_list",
+          "args": {},
+          "id": "fc_16dd2053-d7c2-46ac-844f-33675df64cba"
+        }
+      ],
+      "tool_selection_correct": true,
+      "final_answer": "You have four active alerts: INFY above 10,000, RELIANCE above 100,000, and two more INFY alerts also above 10,000."
+    },
+    {
+      "id": "AV-21",
+      "status": "PASS",
+      "type": "state",
+      "query": "Check my active price alerts for triggered conditions.",
+      "turns": null,
+      "expected_tools": [
+        "watchlist_check"
+      ],
+      "actual_tools": [
+        "watchlist_check"
+      ],
+      "tool_calls": [
+        {
+          "name": "watchlist_check",
+          "args": {},
+          "id": "fc_426bbe5a-f105-4b19-bf45-352cd853f747"
+        }
+      ],
+      "tool_selection_correct": true,
+      "final_answer": "You have no price alerts that have triggered at this time."
+    },
+    {
+      "id": "AV-22",
+      "status": "PASS",
+      "type": "multi_turn_state",
+      "query": null,
+      "turns": [
+        "Add a price alert for TCS when it falls below 1 rupee.",
+        "Remove the alert you just created."
+      ],
+      "expected_tools": [
+        "watchlist_add",
+        "watchlist_remove"
+      ],
+      "actual_tools": [
+        "watchlist_add",
+        "watchlist_remove"
+      ],
+      "tool_calls": [
+        {
+          "name": "watchlist_add",
+          "args": {
+            "condition": "below",
+            "target_price": 1,
+            "ticker": "TCS.NS"
+          },
+          "id": "fc_121c7ff4-b231-4857-b77b-2ce17ff39c1d"
+        },
+        {
+          "name": "watchlist_remove",
+          "args": {
+            "alert_id": 6
+          },
+          "id": "fc_05a8068f-93f1-4b02-8775-e24e1b20c564"
+        }
+      ],
+      "tool_selection_correct": true,
+      "final_answer": "The alert has been removed. Let me know if you need anything else."
+    },
+    {
+      "id": "AV-23",
+      "status": "PASS",
+      "type": "multi_turn",
+      "query": null,
+      "turns": [
+        "What's Infosys trading at?",
+        "What about its 50-day moving average?"
+      ],
+      "expected_tools": [
+        "yahoo_get_quote",
+        "yahoo_get_technical_analysis"
+      ],
+      "actual_tools": [
+        "yahoo_get_quote",
+        "yahoo_get_technical_analysis"
+      ],
+      "tool_calls": [
+        {
+          "name": "yahoo_get_quote",
+          "args": {
+            "ticker": "INFY.NS"
+          },
+          "id": "fc_df144338-8b21-41fa-a4fe-ed2e91f7651d"
+        },
+        {
+          "name": "yahoo_get_technical_analysis",
+          "args": {
+            "period": "6mo",
+            "ticker": "INFY.NS"
+          },
+          "id": "fc_5525b2d9-758d-4525-9571-8e11ee033044"
+        }
+      ],
+      "tool_selection_correct": true,
+      "final_answer": "The 50‑day simple moving average for Infosys is one thousand one hundred ten point six six eight rupees."
+    },
+    {
+      "id": "AV-24",
+      "status": "PASS",
+      "type": "multi_turn",
+      "query": null,
+      "turns": [
+        "Summarize my portfolio.",
+        "What is the concentration HHI?"
+      ],
+      "expected_tools": [
+        "get_portfolio_summary",
+        "get_portfolio_risk"
+      ],
+      "actual_tools": [
+        "get_portfolio_summary",
+        "get_portfolio_risk"
+      ],
+      "tool_calls": [
+        {
+          "name": "get_portfolio_summary",
+          "args": {},
+          "id": "fc_aca8e291-eaff-4000-9348-d4c027d91cbf"
+        },
+        {
+          "name": "get_portfolio_risk",
+          "args": {},
+          "id": "fc_6318f7ea-fad4-475d-8e0e-9b1e87e2eb11"
+        }
+      ],
+      "tool_selection_correct": true,
+      "final_answer": "The concentration HHI for your portfolio is zero point six one seven seven. This reflects a fairly high concentration, driven mainly by the BSE holding."
+    },
+    {
+      "id": "AV-25",
+      "status": "PASS",
+      "type": "multi_turn_state",
+      "query": null,
+      "turns": [
+        "Add a price alert for Reliance when it rises above 100000 rupees.",
+        "What active alerts do I currently have?"
+      ],
+      "expected_tools": [
+        "watchlist_add",
+        "watchlist_list"
+      ],
+      "actual_tools": [
+        "watchlist_add",
+        "watchlist_list"
+      ],
+      "tool_calls": [
+        {
+          "name": "watchlist_add",
+          "args": {
+            "condition": "above",
+            "target_price": 100000,
+            "ticker": "RELIANCE.NS"
+          },
+          "id": "fc_560a92a8-6467-40f6-a52e-4ea6e78ce293"
+        },
+        {
+          "name": "watchlist_list",
+          "args": {},
+          "id": "fc_5b1d976c-afa7-4fe3-a61f-9cc2ea1a8222"
+        }
+      ],
+      "tool_selection_correct": true,
+      "final_answer": "You have five active alerts:\n\nAlert one for INFY above ten thousand rupees, created at 7 p m.  \nAlert three for RELIANCE above one lakh rupees, created at 7 p m.  \nAlert four for INFY above ten thousand rupees, created at 8 p m.  \nAlert five for INFY above ten thousand rupees, created at 8 p m.  \nAlert seven for RELIANCE above one lakh rupees, created at 8 p m."
+    },
+    {
+      "id": "AV-26",
+      "status": "PASS",
+      "type": "multi_turn",
+      "query": null,
+      "turns": [
+        "What's the latest news on TCS?",
+        "What's its current price?"
+      ],
+      "expected_tools": [
+        "yahoo_get_news",
+        "yahoo_get_quote"
+      ],
+      "actual_tools": [
+        "yahoo_get_news",
+        "yahoo_get_quote"
+      ],
+      "tool_calls": [
+        {
+          "name": "yahoo_get_news",
+          "args": {
+            "count": 5,
+            "ticker": "TCS.NS"
+          },
+          "id": "fc_7b63c87a-a0d6-45ed-98f5-d17585066a20"
+        },
+        {
+          "name": "yahoo_get_quote",
+          "args": {
+            "ticker": "TCS.NS"
+          },
+          "id": "fc_a8158581-1ff1-4e79-9479-87777ef8d231"
+        }
+      ],
+      "tool_selection_correct": true,
+      "final_answer": "TCS is trading at ₹ two thousand one hundred five point zero, down about twenty‑three point seven rupees, or roughly ‑1.11 percent, from the previous close."
+    },
+    {
+      "id": "AV-27",
+      "status": "PASS",
+      "type": "irrelevance",
+      "query": "Tell me a joke.",
+      "turns": null,
+      "expected_tools": [],
+      "actual_tools": [],
+      "tool_calls": [],
+      "tool_selection_correct": true,
+      "final_answer": "Why did the stock market break up with the bond market? Because it needed more space to *grow* on its own."
+    },
+    {
+      "id": "AV-28",
+      "status": "PASS",
+      "type": "unsupported_capability",
+      "query": "Book me a flight to Delhi.",
+      "turns": null,
+      "expected_tools": [],
+      "actual_tools": [],
+      "tool_calls": [],
+      "tool_selection_correct": true,
+      "final_answer": "I’m sorry, but I can’t help with booking flights."
+    },
+    {
+      "id": "AV-29",
+      "status": "PASS",
+      "type": "unsupported_capability",
+      "query": "What's the weather in Delhi today?",
+      "turns": null,
+      "expected_tools": [],
+      "actual_tools": [],
+      "tool_calls": [],
+      "tool_selection_correct": true,
+      "final_answer": "I’m sorry, but I don’t have weather information available."
+    },
+    {
+      "id": "AV-30",
+      "status": "PASS",
+      "type": "unsupported_capability",
+      "query": "Send an email to my broker about my portfolio.",
+      "turns": null,
+      "expected_tools": [],
+      "actual_tools": [],
+      "tool_calls": [],
+      "tool_selection_correct": true,
+      "final_answer": "I’m not able to send emails directly, but I can help you draft the message you’d like to send to your broker. Just let me know what details you’d like to include."
+    }
+  ]
+}
