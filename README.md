@@ -44,10 +44,9 @@ Then set your existing API credentials in `.env`. The persistence settings are:
 
 ```env
 DATABASE_URL=postgresql://arthavani:arthavani@localhost:5432/arthavani
-CONVERSATION_THREAD_ID=default-user
 ```
 
-`CONVERSATION_THREAD_ID` identifies the conversation to resume. For this single-user project, `default-user` is a useful development default. Later, replace it with a real authenticated user/session identifier.
+`CONVERSATION_USER_ID` identifies the user and `CONVERSATION_ID` identifies that user's conversation. ArthaVani derives the LangGraph `thread_id` from both values. For this single-user project, `default-user` and `default` are useful development defaults. Later, pass the authenticated user ID and desired conversation ID when constructing `VoicePipeline`.
 
 ### Run ArthaVani
 
@@ -64,7 +63,7 @@ Run the normal test suite with:
 pytest -q
 ```
 
-The PostgreSQL restart-persistence test is skipped unless `DATABASE_URL` is configured. To exercise it locally, start Postgres and run:
+The PostgreSQL restart-persistence test is skipped unless `DATABASE_URL` is configured. When `DATABASE_URL` is configured but PostgreSQL cannot be initialized, ArthaVani fails startup instead of silently falling back to stateless conversation state. To exercise it locally, start Postgres and run:
 
 ```bash
 DATABASE_URL=postgresql://arthavani:arthavani@localhost:5432/arthavani pytest -q tests/test_postgres_persistence.py
