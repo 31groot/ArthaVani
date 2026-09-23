@@ -10,3 +10,6 @@ __pycache__/
 third_party/kite-mcp-server/.kite-mcp-server
 third_party/kite-mcp-server/.env
 third_party/kite-mcp-server/
+
+# Local runtime data
+data/

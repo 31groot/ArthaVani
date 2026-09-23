@@ -1,4 +1,4 @@
-"""Direct, read-only Groww provider for native LangGraph tools."""
+"""User-scoped, read-only Groww provider for ArthaVani."""
 from __future__ import annotations
 
 import os
@@ -8,12 +8,20 @@ from functools import lru_cache
 from typing import Any
 
 from config.settings import settings
+from finance_agent.groww_credentials import decrypt_credentials
+from finance_agent.persistence import get_groww_connection
+from finance_agent.user_context import get_current_user_id
 
 
 class GrowwProvider:
-    """Small reusable wrapper around the official Groww Python SDK."""
+    """Reusable wrapper around the official Groww Python SDK."""
 
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        *,
+        auth_mode: str | None = None,
+        credentials: dict[str, str] | None = None,
+    ) -> None:
         try:
             from growwapi import GrowwAPI
         except ImportError as exc:
@@ -21,36 +29,77 @@ class GrowwProvider:
                 "growwapi is not installed. Install project dependencies first."
             ) from exc
 
-        api_key = settings.GROWW_API_KEY
-        api_secret = settings.GROWW_API_SECRET
-        if not api_key or not api_secret:
-            raise RuntimeError(
-                "GROWW_API_KEY and GROWW_API_SECRET are required."
-            )
+        self._GrowwAPI = GrowwAPI
+        self.auth_mode = auth_mode
+        self.credentials = credentials or {}
 
-        # The SDK currently prints a startup banner. Keep it out of the voice
-        # application's normal stdout stream.
-        with open(os.devnull, "w") as _groww_stdout, redirect_stdout(_groww_stdout):
-            access_token = GrowwAPI.get_access_token(
-                api_key=api_key,
-                secret=api_secret,
-            )
-            self.client = GrowwAPI(access_token)
+        if auth_mode is None:
+            api_key = settings.GROWW_API_KEY
+            api_secret = settings.GROWW_API_SECRET
+            if not api_key or not api_secret:
+                raise RuntimeError(
+                    "GROWW_API_KEY and GROWW_API_SECRET are required."
+                )
+            self.auth_mode = "api_key_secret"
+            self.credentials = {
+                "api_key": api_key,
+                "api_secret": api_secret,
+            }
 
-    def _call(self, method, **kwargs: Any) -> Any:
+        self.client = self._authenticate()
+
+    def _authenticate(self):
         with open(os.devnull, "w") as _groww_stdout, redirect_stdout(_groww_stdout):
-            return method(**kwargs)
+            if self.auth_mode == "api_key_secret":
+                access_token = self._GrowwAPI.get_access_token(
+                    api_key=self.credentials["api_key"],
+                    secret=self.credentials["api_secret"],
+                )
+            elif self.auth_mode == "totp":
+                try:
+                    import pyotp
+                except ImportError as exc:
+                    raise RuntimeError(
+                        "pyotp is required for Groww TOTP connections."
+                    ) from exc
+
+                otp = pyotp.TOTP(self.credentials["totp_secret"]).now()
+                access_token = self._GrowwAPI.get_access_token(
+                    api_key=self.credentials["totp_token"],
+                    totp=otp,
+                )
+            else:
+                raise RuntimeError(f"Unsupported Groww auth mode: {self.auth_mode!r}")
+
+            return self._GrowwAPI(access_token)
+
+    def _call(self, method_name: str, **kwargs: Any) -> Any:
+        try:
+            with open(
+                os.devnull,
+                "w",
+            ) as _groww_stdout, redirect_stdout(_groww_stdout):
+                return getattr(self.client, method_name)(**kwargs)
+        except Exception:
+            # The provider only exposes read-only operations here, so it is
+            # safe to refresh the Groww session once before retrying.
+            self.client = self._authenticate()
+            with open(
+                os.devnull,
+                "w",
+            ) as _groww_stdout, redirect_stdout(_groww_stdout):
+                return getattr(self.client, method_name)(**kwargs)
 
     def get_holdings(self) -> dict[str, Any]:
-        return self._call(self.client.get_holdings_for_user)
+        return self._call("get_holdings_for_user")
 
     def get_positions(self, segment: str | None = None) -> dict[str, Any]:
         if segment:
             return self._call(
-                self.client.get_positions_for_user,
+                "get_positions_for_user",
                 segment=segment,
             )
-        return self._call(self.client.get_positions_for_user)
+        return self._call("get_positions_for_user")
 
     def get_quote(
         self,
@@ -59,7 +108,7 @@ class GrowwProvider:
         trading_symbol: str,
     ) -> dict[str, Any]:
         return self._call(
-            self.client.get_quote,
+            "get_quote",
             exchange=exchange,
             segment=segment,
             trading_symbol=trading_symbol,
@@ -71,7 +120,7 @@ class GrowwProvider:
         exchange_trading_symbols: list[str],
     ) -> dict[str, Any]:
         return self._call(
-            self.client.get_ltp,
+            "get_ltp",
             segment=segment,
             exchange_trading_symbols=tuple(exchange_trading_symbols),
         )
@@ -95,22 +144,65 @@ class GrowwProvider:
         if interval_in_minutes is not None:
             kwargs["interval_in_minutes"] = interval_in_minutes
 
-        # Groww currently documents this endpoint, although it marks the
-        # method as deprecated in favor of get_historical_candles.
         return self._call(
-            self.client.get_historical_candle_data,
+            "get_historical_candle_data",
             **kwargs,
         )
 
 
+def build_groww_provider_from_credentials(
+    auth_mode: str,
+    credentials: dict[str, str],
+) -> GrowwProvider:
+    return GrowwProvider(
+        auth_mode=auth_mode,
+        credentials=credentials,
+    )
+
+
 @lru_cache(maxsize=1)
-def get_groww_provider() -> GrowwProvider:
-    """Reuse one authenticated Groww SDK client within the process."""
+def _legacy_groww_provider() -> GrowwProvider:
     return GrowwProvider()
 
 
+@lru_cache(maxsize=64)
+def _user_groww_provider(
+    user_id: str,
+    updated_at: str,
+    auth_mode: str,
+    encrypted_credentials: str,
+) -> GrowwProvider:
+    del updated_at
+    credentials = decrypt_credentials(encrypted_credentials)
+    return GrowwProvider(
+        auth_mode=auth_mode,
+        credentials=credentials,
+    )
+
+
+def get_groww_provider() -> GrowwProvider:
+    """Return the provider for the authenticated user or local env fallback."""
+    user_id = get_current_user_id()
+
+    if not user_id:
+        return _legacy_groww_provider()
+
+    connection = get_groww_connection(user_id)
+    if connection is None:
+        raise RuntimeError(
+            "Groww is not connected for this user. Connect Groww first."
+        )
+
+    updated_at = str(connection["updated_at"])
+    return _user_groww_provider(
+        user_id,
+        updated_at,
+        connection["auth_mode"],
+        connection["encrypted_credentials"],
+    )
+
+
 def holding_rows(payload: dict[str, Any]) -> list[dict[str, Any]]:
-    """Normalize the holdings response into a list of dictionaries."""
     if not isinstance(payload, dict):
         return []
 

@@ -1,11 +1,10 @@
-
 from functools import lru_cache
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    """Application configuration for the native LangGraph tool layer."""
+    """Application configuration for ArthaVani."""
 
     GROWW_API_KEY: str | None = None
     GROWW_API_SECRET: str | None = None
@@ -23,21 +22,22 @@ class Settings(BaseSettings):
 
     WATCHLIST_DB_PATH: str = "data/watchlist.db"
 
-    # Postgres connection string used by AsyncPostgresSaver to persist
-    # LangGraph conversation state (checkpoints), keyed by thread_id.
-    #
-    # Example: postgresql://user:password@localhost:5432/arthavani
-    #
-    # Optional and defaults to None: when unset, FinanceAgentRunner falls
-    # back to its original stateless behavior (no checkpointer attached).
-    # This keeps unit tests -- which construct FinanceAgentRunner directly
-    # without a database -- working without requiring Postgres.
     DATABASE_URL: str | None = None
 
-    # Application-level conversation identity. The voice pipeline derives
-    # the LangGraph thread_id from these stable identifiers.
     CONVERSATION_USER_ID: str = "default-user"
     CONVERSATION_ID: str = "default"
+
+    # FastAPI authentication
+    API_JWT_SECRET_KEY: str = ""
+    API_JWT_ALGORITHM: str = "HS256"
+    API_JWT_EXPIRE_MINUTES: int = 60
+    API_CORS_ORIGINS: list[str] = [
+        "http://localhost:3000",
+        "http://localhost:5173",
+    ]
+
+    # Encrypt stored Groww credentials at rest.
+    GROWW_CREDENTIALS_ENCRYPTION_KEY: str = ""
 
     model_config = SettingsConfigDict(
         env_file=".env",

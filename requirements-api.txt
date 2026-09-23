@@ -1,0 +1,6 @@
+fastapi[standard]>=0.115,<1
+PyJWT>=2.10,<3
+pwdlib[argon2]>=0.2,<1
+cryptography>=44,<47
+pyotp>=2.9,<3
+pydantic[email]>=2.11,<3
