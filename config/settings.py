@@ -35,9 +35,10 @@ class Settings(BaseSettings):
     # without a database -- working without requiring Postgres.
     DATABASE_URL: str | None = None
 
-    # Stable LangGraph thread identifier used for the default voice
-    # conversation. Override this per user/session in the environment.
-    CONVERSATION_THREAD_ID: str = "default-user"
+    # Application-level conversation identity. The voice pipeline derives
+    # the LangGraph thread_id from these stable identifiers.
+    CONVERSATION_USER_ID: str = "default-user"
+    CONVERSATION_ID: str = "default"
 
     model_config = SettingsConfigDict(
         env_file=".env",

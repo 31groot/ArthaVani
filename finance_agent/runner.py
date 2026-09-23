@@ -18,6 +18,7 @@ from langchain_core.messages import (
 from config.settings import settings
 from config.logger import logger
 
+from finance_agent.errors import LLMProviderError, PostgresPersistenceError
 from finance_agent.graph import build_finance_agent_graph
 from finance_agent.tools import build_finance_tools
 
@@ -57,9 +58,20 @@ class FinanceAgentRunner:
         database_url = self._database_url or settings.DATABASE_URL
 
         if database_url:
-            self._checkpointer_cm = AsyncPostgresSaver.from_conn_string(database_url)
-            self._checkpointer = await self._checkpointer_cm.__aenter__()
-            await self._checkpointer.setup()
+            try:
+                self._checkpointer_cm = AsyncPostgresSaver.from_conn_string(database_url)
+                self._checkpointer = await self._checkpointer_cm.__aenter__()
+                await self._checkpointer.setup()
+            except Exception as exc:
+                logger.exception(
+                    "Failed to initialize PostgreSQL conversation persistence."
+                )
+                await self._close_checkpointer()
+                raise PostgresPersistenceError(
+                    "PostgreSQL conversation persistence could not be initialized. "
+                    "Check DATABASE_URL and confirm that PostgreSQL is reachable."
+                ) from exc
+
             logger.info("Conversation checkpointing enabled (Postgres).")
         else:
             logger.warning(
@@ -163,21 +175,38 @@ class FinanceAgentRunner:
             if text:
                 yield text
 
-    async def stop(self) -> None:
-        if self._checkpointer_cm is not None:
+    async def _close_checkpointer(self) -> None:
+        if self._checkpointer_cm is None:
+            self._checkpointer = None
+            return
+
+        try:
             await self._checkpointer_cm.__aexit__(None, None, None)
-        self._checkpointer_cm = None
-        self._checkpointer = None
+        except Exception:
+            logger.exception("Failed to close PostgreSQL checkpointer cleanly.")
+        finally:
+            self._checkpointer_cm = None
+            self._checkpointer = None
+
+    async def stop(self) -> None:
+        await self._close_checkpointer()
         self._graph = None
         self._tools = None
 
 
 def _build_llm_chat_model() -> ChatGroq:
-    return ChatGroq(
-        groq_api_key=settings.GROQ_API_KEY,
-        model_name=settings.GROQ_MODEL,
-        temperature=0.0,
-    )
+    try:
+        return ChatGroq(
+            groq_api_key=settings.GROQ_API_KEY,
+            model_name=settings.GROQ_MODEL,
+            temperature=0.0,
+        )
+    except Exception as exc:
+        logger.exception("Failed to initialize the Groq LLM.")
+        raise LLMProviderError(
+            "Groq LLM could not be initialized. "
+            "Check GROQ_API_KEY and GROQ_MODEL."
+        ) from exc
 
 
 def _to_langchain_messages(messages: Sequence[Any]) -> list[BaseMessage]:

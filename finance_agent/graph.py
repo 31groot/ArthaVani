@@ -1,4 +1,5 @@
 
+import asyncio
 from collections.abc import Sequence
 
 from langchain_core.language_models.chat_models import BaseChatModel
@@ -8,6 +9,9 @@ from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.graph import START, MessagesState, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 from langgraph.prebuilt import ToolNode, tools_condition
+
+from config.logger import logger
+from finance_agent.errors import LLMProviderError
 
 
 FINANCE_AGENT_SYSTEM_PROMPT = """
@@ -78,7 +82,20 @@ def build_finance_agent_graph(
         # re-adding a SystemMessage on every turn would otherwise duplicate
         # it in Postgres on every single turn.
         messages = [SystemMessage(content=FINANCE_AGENT_SYSTEM_PROMPT)] + state["messages"]
-        response = await model_with_tools.ainvoke(messages)
+
+        try:
+            response = await model_with_tools.ainvoke(messages)
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            provider_name = model.__class__.__name__
+            logger.exception("%s LLM request failed.", provider_name)
+            raise LLMProviderError(
+                f"{provider_name} LLM request failed. "
+                "Check the model configuration, network connection, "
+                "and provider availability."
+            ) from exc
+
         return {"messages": [response]}
 
     builder = StateGraph(MessagesState)

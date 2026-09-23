@@ -1,8 +1,9 @@
 import asyncio
 
 from config.logger import logger
-from config.settings import settings
 
+from finance_agent.conversation import ConversationIdentity
+from finance_agent.errors import LLMProviderError
 from finance_agent.runner import FinanceAgentRunner
 from voice.stt.events import TranscriptEvent
 from voice.text.text_splitter import SentenceSplitter
@@ -14,7 +15,7 @@ class LLMWorker:
         self,
         splitter: SentenceSplitter,
         transcript_queue: asyncio.Queue[TranscriptEvent],
-        thread_id: str | None = None,
+        conversation_identity: ConversationIdentity,
     ):
         # Identifies this voice session's conversation to the
         # AsyncPostgresSaver checkpointer, so every turn is appended to
@@ -23,7 +24,7 @@ class LLMWorker:
         # to resume a specific prior conversation; otherwise the configured
         # CONVERSATION_THREAD_ID is used.
 
-        self.thread_id = thread_id or settings.CONVERSATION_THREAD_ID
+        self.conversation_identity = conversation_identity
 
         # Converts streamed LLM text into sentence-sized pieces
         # that can be sent to the TTS pipeline incrementally.
@@ -57,9 +58,6 @@ class LLMWorker:
     async def run(self) -> None:
         try:
             logger.info("Starting LLM Worker...")
-
-            # Start the finance agent inside this long-lived worker task.
-            await self.agent_runner.start()
 
             while True:
                 event = await self.transcript_queue.get()
@@ -142,7 +140,7 @@ class LLMWorker:
             # Postgres automatically inside the graph.
             async for text_chunk in self.agent_runner.astream_text(
                 user_text,
-                thread_id=self.thread_id,
+                thread_id=self.conversation_identity.thread_id,
             ):
 
                 # Keep the chunk so the full response can be rebuilt later.
@@ -164,28 +162,28 @@ class LLMWorker:
             await self.splitter.flush()
 
         except asyncio.CancelledError:
-
-            # Allow cancellation to propagate normally.
             raise
 
-        except Exception:
+        except LLMProviderError as exc:
+            logger.error("LLM provider failure: %s", exc)
 
-            # _generate() is launched with asyncio.create_task(),
-            # so it runs as a background task.
-            #
-            # Log errors explicitly so failures such as:
-            #
-            # - invalid API credentials
-            # - unavailable model
-            # - MCP server failure
-            # - network errors
-            #
-            # do not disappear silently.
+            try:
+                await self.splitter.feed(
+                    "I'm having trouble reaching the finance assistant right now."
+                )
+                await self.splitter.flush()
+            except Exception:
+                logger.exception(
+                    "Failed to speak the LLM provider error message."
+                )
+
+            return
+
+        except Exception:
             logger.exception(
                 "Finance agent generation failed; no response will "
                 "be spoken for this turn."
             )
-
             return
 
         # Join all streamed chunks into one complete assistant response.
@@ -210,19 +208,15 @@ class LLMWorker:
         )
 
 
-    def start(self) -> None:
-
-        # Prevent starting multiple copies of the main worker.
+    async def start(self) -> None:
         if self._task is not None:
+            raise RuntimeError("LLM Worker already started.")
 
-            raise RuntimeError(
-                "LLM Worker already started."
-            )
+        # Initialize the agent before creating the background task so that
+        # PostgreSQL/Groq startup failures reach VoicePipeline.start().
+        await self.agent_runner.start()
 
-        # Start the long-running transcript listener.
-        self._task = asyncio.create_task(
-            self.run()
-        )
+        self._task = asyncio.create_task(self.run())
 
     async def interrupt(self) -> None:
 

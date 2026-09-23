@@ -4,6 +4,8 @@ from config.constants import MAX_QUEUE_SIZE
 from config.logger import logger
 from config.settings import settings
 
+from finance_agent.conversation import ConversationIdentity
+
 from voice.audio.audio_fanout import AudioFanout
 from voice.audio.microphone import Microphone
 from voice.audio.speaker import Speaker
@@ -27,7 +29,17 @@ from voice.vad.worker import VADWorker
 
 class VoicePipeline:
 
-    def __init__(self):
+    def __init__(
+        self,
+        *,
+        user_id: str | None = None,
+        conversation_id: str | None = None,
+    ):
+
+        self.conversation_identity = ConversationIdentity(
+            user_id=user_id or settings.CONVERSATION_USER_ID,
+            conversation_id=conversation_id or settings.CONVERSATION_ID,
+        )
 
         # Queue receiving raw audio from the microphone.
         self.audio_input_queue: asyncio.Queue[bytes] = asyncio.Queue(
@@ -125,7 +137,7 @@ class VoicePipeline:
         self.llm_worker = LLMWorker(
             splitter=self.sentence_splitter,
             transcript_queue=self.transcript_queue,
-            thread_id=settings.CONVERSATION_THREAD_ID,
+            conversation_identity=self.conversation_identity,
         )
 
         # Stores the main pipeline task.
@@ -142,7 +154,15 @@ class VoicePipeline:
                 "Voice Pipeline already started."
             )
 
-        logger.info("Starting Voice Pipeline...")
+        logger.info(
+            "Starting Voice Pipeline for user=%s conversation=%s...",
+            self.conversation_identity.user_id,
+            self.conversation_identity.conversation_id,
+        )
+
+        # Initialize the LLM/checkpointer first. If PostgreSQL or Groq is
+        # unavailable, startup fails before audio hardware is opened.
+        await self.llm_worker.start()
 
         # Start hardware.
         await self.microphone.start()
@@ -154,7 +174,6 @@ class VoicePipeline:
         # Start all processing workers.
         self.vad_worker.start()
         self.stt_worker.start()
-        self.llm_worker.start()
         self.tts_worker.start()
 
         # Start the main loop that moves microphone audio
