@@ -9,7 +9,6 @@ class Settings(BaseSettings):
 
     GROWW_API_KEY: str | None = None
     GROWW_API_SECRET: str | None = None
-    GROWW_ACCESS_TOKEN: str | None = None
 
     LLM_PROVIDER: str = "groq"
     GROQ_API_KEY: str = ""

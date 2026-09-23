@@ -1,0 +1,275 @@
+[
+  {
+    "id": "AV-01",
+    "query": "Summarize my portfolio.",
+    "expected_tools": [
+      "get_portfolio_summary"
+    ],
+    "type": "simple"
+  },
+  {
+    "id": "AV-02",
+    "query": "What is my portfolio concentration HHI?",
+    "expected_tools": [
+      "get_portfolio_risk"
+    ],
+    "type": "simple"
+  },
+  {
+    "id": "AV-03",
+    "query": "What's the current price of Infosys?",
+    "expected_tools": [
+      "yahoo_get_quote"
+    ],
+    "type": "simple"
+  },
+  {
+    "id": "AV-04",
+    "query": "Show me Infosys fundamentals.",
+    "expected_tools": [
+      "yahoo_get_fundamentals"
+    ],
+    "type": "simple"
+  },
+  {
+    "id": "AV-05",
+    "query": "Show me Infosys price history for the last month.",
+    "expected_tools": [
+      "yahoo_get_history"
+    ],
+    "type": "simple"
+  },
+  {
+    "id": "AV-06",
+    "query": "What is Infosys's 50-day moving average?",
+    "expected_tools": [
+      "yahoo_get_technical_analysis"
+    ],
+    "type": "simple"
+  },
+  {
+    "id": "AV-07",
+    "query": "What's the latest news about TCS?",
+    "expected_tools": [
+      "yahoo_get_news"
+    ],
+    "type": "simple"
+  },
+  {
+    "id": "AV-08",
+    "query": "What is the latest NAV of HDFC Flexi Cap Fund?",
+    "expected_tools": [
+      "amfi_get_latest_nav"
+    ],
+    "type": "simple"
+  },
+  {
+    "id": "AV-09",
+    "query": "Convert 100 USD to INR.",
+    "expected_tools": [
+      "convert_currency"
+    ],
+    "type": "simple"
+  },
+  {
+    "id": "AV-10",
+    "query": "Is the NSE open right now?",
+    "expected_tools": [
+      "get_nse_market_status"
+    ],
+    "type": "simple"
+  },
+  {
+    "id": "AV-11",
+    "query": "What's my portfolio worth and what's my total P&L?",
+    "expected_tools": [
+      "get_portfolio_summary"
+    ],
+    "type": "multiple_facts"
+  },
+  {
+    "id": "AV-12",
+    "query": "What is my concentration HHI and which holding has the largest portfolio weight?",
+    "expected_tools": [
+      "get_portfolio_risk"
+    ],
+    "type": "multiple_facts"
+  },
+  {
+    "id": "AV-13",
+    "query": "Tell me the current price of Infosys and its latest news.",
+    "expected_tools": [
+      "yahoo_get_quote",
+      "yahoo_get_news"
+    ],
+    "tool_match": "set",
+    "type": "parallel"
+  },
+  {
+    "id": "AV-14",
+    "query": "Give me TCS fundamentals and the latest news.",
+    "expected_tools": [
+      "yahoo_get_fundamentals",
+      "yahoo_get_news"
+    ],
+    "tool_match": "set",
+    "type": "parallel"
+  },
+  {
+    "id": "AV-15",
+    "query": "What's Infosys's current price and 50-day moving average?",
+    "expected_tools": [
+      "yahoo_get_quote",
+      "yahoo_get_technical_analysis"
+    ],
+    "tool_match": "set",
+    "type": "parallel"
+  },
+  {
+    "id": "AV-16",
+    "query": "Tell me my portfolio value and whether the NSE is currently open.",
+    "expected_tools": [
+      "get_portfolio_summary",
+      "get_nse_market_status"
+    ],
+    "tool_match": "set",
+    "type": "parallel"
+  },
+  {
+    "id": "AV-17",
+    "query": "What is TCS's current price, its RSI, and its latest news?",
+    "expected_tools": [
+      "yahoo_get_quote",
+      "yahoo_get_technical_analysis",
+      "yahoo_get_news"
+    ],
+    "tool_match": "set",
+    "type": "parallel"
+  },
+  {
+    "id": "AV-18",
+    "query": "How much is 500 USD in INR, and is the NSE open?",
+    "expected_tools": [
+      "convert_currency",
+      "get_nse_market_status"
+    ],
+    "tool_match": "set",
+    "type": "parallel"
+  },
+  {
+    "id": "AV-19",
+    "query": "Add a price alert for Infosys when it rises above 10000 rupees.",
+    "expected_tools": [
+      "watchlist_add"
+    ],
+    "side_effect": true,
+    "type": "state_change"
+  },
+  {
+    "id": "AV-20",
+    "query": "List my active price alerts.",
+    "expected_tools": [
+      "watchlist_list"
+    ],
+    "type": "state"
+  },
+  {
+    "id": "AV-21",
+    "query": "Check my active price alerts for triggered conditions.",
+    "expected_tools": [
+      "watchlist_check"
+    ],
+    "type": "state"
+  },
+  {
+    "id": "AV-22",
+    "turns": [
+      "Add a price alert for TCS when it falls below 1 rupee.",
+      "Remove the alert you just created."
+    ],
+    "expected_tools": [
+      "watchlist_add",
+      "watchlist_remove"
+    ],
+    "tool_match": "sequence",
+    "side_effect": true,
+    "type": "multi_turn_state"
+  },
+  {
+    "id": "AV-23",
+    "turns": [
+      "What's Infosys trading at?",
+      "What about its 50-day moving average?"
+    ],
+    "expected_tools": [
+      "yahoo_get_quote",
+      "yahoo_get_technical_analysis"
+    ],
+    "tool_match": "sequence",
+    "type": "multi_turn"
+  },
+  {
+    "id": "AV-24",
+    "turns": [
+      "Summarize my portfolio.",
+      "What is the concentration HHI?"
+    ],
+    "expected_tools": [
+      "get_portfolio_summary",
+      "get_portfolio_risk"
+    ],
+    "tool_match": "sequence",
+    "type": "multi_turn"
+  },
+  {
+    "id": "AV-25",
+    "turns": [
+      "Add a price alert for Reliance when it rises above 100000 rupees.",
+      "What active alerts do I currently have?"
+    ],
+    "expected_tools": [
+      "watchlist_add",
+      "watchlist_list"
+    ],
+    "tool_match": "sequence",
+    "side_effect": true,
+    "type": "multi_turn_state"
+  },
+  {
+    "id": "AV-26",
+    "turns": [
+      "What's the latest news on TCS?",
+      "What's its current price?"
+    ],
+    "expected_tools": [
+      "yahoo_get_news",
+      "yahoo_get_quote"
+    ],
+    "tool_match": "sequence",
+    "type": "multi_turn"
+  },
+  {
+    "id": "AV-27",
+    "query": "Tell me a joke.",
+    "expected_tools": [],
+    "type": "irrelevance"
+  },
+  {
+    "id": "AV-28",
+    "query": "Book me a flight to Delhi.",
+    "expected_tools": [],
+    "type": "unsupported_capability"
+  },
+  {
+    "id": "AV-29",
+    "query": "What's the weather in Delhi today?",
+    "expected_tools": [],
+    "type": "unsupported_capability"
+  },
+  {
+    "id": "AV-30",
+    "query": "Send an email to my broker about my portfolio.",
+    "expected_tools": [],
+    "type": "unsupported_capability"
+  }
+]

@@ -591,9 +591,15 @@ def yahoo_get_earnings_calendar(ticker: str) -> dict[str, Any]:
 def amfi_get_latest_nav(
     scheme_query: str,
     limit: int = 5,
-) -> list[dict[str, Any]]:
+) -> dict[str, Any]:
     """Find current mutual-fund NAVs from AMFI's published NAV report."""
-    return _amfi().latest_nav(scheme_query, limit)
+    results = _amfi().latest_nav(scheme_query, limit)
+    return {
+        "results": results,
+        "count": len(results),
+        "found": bool(results),
+        "scheme_query": scheme_query,
+    }
 
 
 @tool
@@ -602,14 +608,22 @@ def amfi_get_nav_history(
     start_date: str,
     end_date: str,
     limit: int = 100,
-) -> list[dict[str, Any]]:
+) -> dict[str, Any]:
     """Get mutual-fund NAV history from AMFI for a date range."""
-    return _amfi().history(
+    results = _amfi().history(
         scheme_query,
         start_date,
         end_date,
         limit,
     )
+    return {
+        "results": results,
+        "count": len(results),
+        "found": bool(results),
+        "scheme_query": scheme_query,
+        "start_date": start_date,
+        "end_date": end_date,
+    }
 
 
 @tool
@@ -654,19 +668,29 @@ def watchlist_remove(alert_id: int) -> dict[str, Any]:
 
 
 @tool
-def watchlist_list() -> list[dict[str, Any]]:
+def watchlist_list() -> dict[str, Any]:
     """List active saved price alerts."""
-    return _watchlist().list_active()
+    alerts = _watchlist().list_active()
+    return {
+        "alerts": alerts,
+        "count": len(alerts),
+        "has_alerts": bool(alerts),
+    }
 
 
 @tool
-def watchlist_check() -> list[dict[str, Any]]:
+def watchlist_check() -> dict[str, Any]:
     """Check active saved price alerts against current Yahoo prices.
 
     A triggered alert is deactivated after firing once. This tool is the
     polling/checking primitive; a later scheduler can call it periodically.
     """
-    return check_watchlist(_watchlist(), _yahoo())
+    triggered = check_watchlist(_watchlist(), _yahoo())
+    return {
+        "triggered_alerts": triggered,
+        "count": len(triggered),
+        "has_triggered": bool(triggered),
+    }
 
 
 def build_finance_tools() -> list[Any]:

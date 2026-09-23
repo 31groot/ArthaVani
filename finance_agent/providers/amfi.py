@@ -21,8 +21,9 @@ class AMFIProvider:
         })
 
     def latest_nav(self, query: str, limit: int = 5) -> list[dict[str, Any]]:
-        text = self.session.get(AMFI_LATEST_URL, timeout=15).text
-        return _find_schemes(text, query, limit)
+        response = self.session.get(AMFI_LATEST_URL, timeout=15)
+        response.raise_for_status()
+        return _find_schemes(response.text, query, limit)
 
     def history(
         self,
@@ -66,39 +67,53 @@ def _find_schemes(
 
         parts = [part.strip() for part in line.split(";")]
 
-        if len(parts) < 6:
+        # Current AMFI NAVAll.txt format:
+        # Scheme Code;ISIN Growth;ISIN Reinvestment;Scheme Name;
+        # Plan;Option;Net Asset Value;Date
+        if len(parts) >= 8 and parts[0].isdigit():
+            (
+                code,
+                isin_growth,
+                isin_reinvestment,
+                name,
+                plan,
+                option,
+                nav,
+                nav_date,
+                *_
+            ) = parts
+
+            if wanted not in name.lower():
+                continue
+
+            try:
+                nav_value = float(nav)
+            except (TypeError, ValueError):
+                continue
+
+            results.append({
+                "scheme_code": code,
+                "isin_growth_or_payout": isin_growth or None,
+                "isin_reinvestment": isin_reinvestment or None,
+                "scheme_name": name,
+                "plan": plan,
+                "option": option,
+                "nav": nav_value,
+                "date": nav_date,
+                "amc": current_amc,
+                "category": current_category,
+            })
+
+            if len(results) >= limit:
+                break
+
+            continue
+
+        if len(parts) >= 6:
             if "mutual fund" in line.lower():
                 current_amc = line
             elif "(" in line:
                 current_category = line
-            continue
-
-        code, isin_growth, isin_reinvestment, name, nav, nav_date = parts[:6]
-
-        if not code.isdigit():
-            continue
-
-        if wanted not in name.lower():
-            continue
-
-        try:
-            nav_value = float(nav)
-        except (TypeError, ValueError):
-            continue
-
-        results.append({
-            "scheme_code": code,
-            "isin_growth_or_payout": isin_growth or None,
-            "isin_reinvestment": isin_reinvestment or None,
-            "scheme_name": name,
-            "nav": nav_value,
-            "date": nav_date,
-            "amc": current_amc,
-            "category": current_category,
-        })
-
-        if len(results) >= limit:
-            break
 
     return results
 
