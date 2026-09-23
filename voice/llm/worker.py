@@ -14,7 +14,6 @@ class LLMWorker:
         self,
         splitter: SentenceSplitter,
         transcript_queue: asyncio.Queue[TranscriptEvent],
-        # on_new_turn=None,
     ):
 
         # Converts streamed LLM text into sentence-sized pieces
@@ -35,11 +34,6 @@ class LLMWorker:
         # Queue containing transcript events produced by the
         # speech-to-text system.
         self.transcript_queue = transcript_queue
-
-        # Callback that could be used to notify other
-        # parts of the application when a new user turn begins.
- 
-        # self.on_new_turn = on_new_turn
 
         # Stores the conversation so the finance agent can see
         # previous user and assistant messages.
@@ -120,8 +114,6 @@ class LLMWorker:
             # from this SAME worker task that started it.
             await self.agent_runner.stop()
 
-  
-            
     async def _generate(self) -> None:
 
         # Store every streamed LLM chunk so we can reconstruct
@@ -225,6 +217,38 @@ class LLMWorker:
         self._task = asyncio.create_task(
             self.run()
         )
+
+    async def interrupt(self) -> None:
+
+        # Interrupt the currently running finance-agent generation.
+        #
+        # This is used by barge-in when the user starts speaking
+        # while the assistant is still generating a response.
+        if (
+            self._generation_task is not None
+            and not self._generation_task.done()
+        ):
+
+            logger.info(
+                "Barge-in: cancelling active LLM generation."
+            )
+
+            self._generation_task.cancel()
+
+            try:
+
+                await self._generation_task
+
+            except asyncio.CancelledError:
+
+                # Cancellation is expected here.
+                pass
+
+        self._generation_task = None
+
+        # Discard any incomplete sentence that the LLM had streamed
+        # but which has not yet been sent to TTS.
+        self.splitter.clear()
 
     async def stop(self) -> None:
 

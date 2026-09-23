@@ -8,10 +8,10 @@ import sounddevice as sd
 from config.constants import (
     CHANNELS,
     CHUNK_SIZE,
+    DROPPED_VOL,
+    INITIAL_VOL,
     MAX_QUEUE_SIZE,
     SAMPLE_RATE,
-    # INITIAL_VOL,
-    # DROPPED_VOL,
 )
 from config.logger import logger
 
@@ -25,10 +25,9 @@ class Speaker:
     ):
         # This is the asyncio queue where the TTS layer
         # places audio that needs to be played.
-        
         self.audio_queue = audio_queue
 
-        # echo canceller.
+        # Echo canceller.
         #
         # The Speaker tells the echo canceller when audio is being played
         # and provides the speaker audio as a reference signal.
@@ -59,10 +58,11 @@ class Speaker:
         # threads/functions such as _audio_callback() and clear().
         self._buffer_lock = threading.Lock()
 
+        # Current playback volume level.
+        self._volume = INITIAL_VOL
+
         # Used to track whether real, non-silent audio is currently
         # being played.
-        
-        # self._volume = INITIAL_VOL
         self._playback_active = False
 
         # Prevents logging "playback started" on every callback.
@@ -108,7 +108,7 @@ class Speaker:
         # Start the physical speaker stream.
         self.stream.start()
 
-        # Start a background  atask that transfersudio from the
+        # Start a background task that transfers audio from the
         # application's asyncio queue into the normal thread-safe
         # playback queue.
         self._task = asyncio.create_task(
@@ -170,7 +170,6 @@ class Speaker:
         ).itemsize
 
         # Calculate how many bytes SoundDevice needs for this callback.
-        
         required_bytes = (
             frames * CHANNELS * bytes_per_sample
         )
@@ -278,16 +277,20 @@ class Speaker:
                     # The remaining frames stay as zeros (silence).
                     audio_array[:available_frames] = partial
 
-            # volume control.
-            
-            # multiply the outgoing audio by
-            # _volume to make the assistant quieter or louder.
+            # Apply the current speaker volume.
             #
-            # if self._volume != INITIAL_VOL:
-            #     audio_array = (
-            #         audio_array.astype(np.float32)
-            #         * self._volume
-            #     ).astype(np.int16)
+            # During barge-in this drops the assistant volume so the
+            # user's speech is easier to hear.
+            if self._volume != INITIAL_VOL:
+                audio_array = (
+                    audio_array.astype(np.float32)
+                    * self._volume
+                ).clip(
+                    -32768,
+                    32767,
+                ).astype(
+                    np.int16
+                )
 
             # Give the completed audio buffer to SoundDevice.
             #
@@ -336,24 +339,32 @@ class Speaker:
                         audio_array.reshape(-1)
                     )
 
-    # Optional "ducking" feature.
-    #
-    # Ducking means temporarily lowering speaker volume, for example
-    # when the user starts speaking while the assistant is talking.
-    
-    # def duck(self, level: float = DROPPED_VOL) -> None:
-    #
-    #     with self._buffer_lock:
-    #         self._volume = level
-    #
-    #     logger.info("Speaker ducked for possible user speech.")
+    def duck(
+        self,
+        level: float = DROPPED_VOL,
+    ) -> None:
 
-    # def unduck(self) -> None:
-    #
-    #     with self._buffer_lock:
-    #         self._volume = INITIAL_VOL
-    #
-    #     logger.info("Speaker unducked; restoring normal volume.")
+        level = max(
+            0.0,
+            min(1.0, float(level)),
+        )
+
+        with self._buffer_lock:
+            self._volume = level
+
+        logger.info(
+            "Speaker ducked to %.0f%%.",
+            level * 100,
+        )
+
+    def unduck(self) -> None:
+
+        with self._buffer_lock:
+            self._volume = INITIAL_VOL
+
+        logger.info(
+            "Speaker unducked to normal volume.",
+        )
 
     async def clear(self) -> None:
 
@@ -364,8 +375,6 @@ class Speaker:
             self._buffer.clear()
 
             # Mark playback as inactive.
-            
-            # self._volume = INITIAL_VOL
             self._playback_active = False
             self._logged_playback_start = False
 

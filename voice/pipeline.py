@@ -4,10 +4,10 @@ from config.constants import MAX_QUEUE_SIZE
 from config.logger import logger
 from config.settings import settings
 
-from voice.audio.webrtc_aec import EchoCanceller
 from voice.audio.audio_fanout import AudioFanout
 from voice.audio.microphone import Microphone
 from voice.audio.speaker import Speaker
+from voice.audio.webrtc_aec import EchoCanceller
 
 from voice.llm.worker import LLMWorker
 
@@ -23,6 +23,7 @@ from voice.vad.detector import SpeechDetector
 from voice.vad.events import ConversationEvent, SpeechState
 from voice.vad.silero import SileroVAD
 from voice.vad.worker import VADWorker
+
 
 class VoicePipeline:
 
@@ -117,19 +118,9 @@ class VoicePipeline:
             audio_queue=self.speaker_audio_queue,
         )
 
-
         self.sentence_splitter = SentenceSplitter(
             sentence_queue=self.sentence_queue,
         )
-
-        # async def _on_new_turn() -> None:
-        #     # A new turn interrupted a previous one: stop whatever
-        #     # TTS is speaking/queued and clear the speaker's
-        #     # playback buffer so stale audio doesn't keep playing.
-        #     await self.tts_worker.interrupt()
-        #     await self.speaker.clear()
-
-        # self._on_new_turn = _on_new_turn
 
         self.llm_worker = LLMWorker(
             splitter=self.sentence_splitter,
@@ -140,7 +131,7 @@ class VoicePipeline:
         self._run_task: asyncio.Task | None = None
 
         # Stores the barge-in listener task.
-        # self._barge_in_task: asyncio.Task | None = None
+        self._barge_in_task: asyncio.Task | None = None
 
     async def start(self) -> None:
 
@@ -174,55 +165,78 @@ class VoicePipeline:
         # Start the loop that listens for VAD speech-start events
         # and uses them to interrupt any in-progress response
         # (true barge-in — doesn't wait for STT to finish).
-        # self._barge_in_task = asyncio.create_task(
-        #     self._barge_in_loop()
-        # )
+        self._barge_in_task = asyncio.create_task(
+            self._barge_in_loop()
+        )
 
         logger.info("Voice Pipeline started.")
 
-    # async def _barge_in_loop(self) -> None:
+    async def _barge_in_loop(self) -> None:
 
-    #     logger.info("Barge-in listener started.")
+        logger.info(
+            "Barge-in listener started."
+        )
 
-    #     try:
+        try:
 
-    #         while True:
+            while True:
 
-    #             event = await self.conversation_queue.get()
+                event = await self.conversation_queue.get()
 
-    #             logger.info("Conversation event: %s", event.state)
+                logger.info(
+                    "Conversation event: %s",
+                    event.state,
+                )
 
-    #             # if event.state is SpeechState.POSSIBLE_STARTED:
-    #             #     self.speaker.duck()
-    #             #     continue
+                if event.state == SpeechState.STARTED:
 
-    #             # if event.state is SpeechState.POSSIBLE_ENDED:
-    #             #     self.speaker.unduck()
-    #             #     continue
+                    logger.info(
+                        "Speech started; triggering barge-in."
+                    )
 
-    #             if event.state is SpeechState.ENDED:
-    #                 logger.info("Speech ended; waiting for Deepgram final turn.")
-    #                 asyncio.create_task(self._finalize_watchdog())
-    #                 continue
+                    # Lower assistant volume immediately.
+                    self.speaker.duck()
 
-    #             if event.state is not SpeechState.STARTED:
-    #                 continue
+                    # Stop any active LLM generation.
+                    await self.llm_worker.interrupt()
 
-                # logger.info("Speech started; barge-in interrupt triggered.")
-                # await self.llm_worker.interrupt()
-                # await self._on_new_turn()
+                    # Stop current TTS synthesis and remove any
+                    # sentences waiting to be synthesized.
+                    await self.tts_worker.interrupt()
 
-        # except asyncio.CancelledError:
+                    # Remove audio already buffered for playback.
+                    await self.speaker.clear()
 
-        #     logger.info("Barge-in listener stopped.")
+                    continue
 
-        #     raise
+                if event.state == SpeechState.ENDED:
 
-        # except Exception:
+                    logger.info(
+                        "Speech ended; restoring speaker volume."
+                    )
 
-        #     logger.exception("Barge-in listener crashed.")
+                    self.speaker.unduck()
 
-        #     raise
+                    # Give Deepgram time to emit its own final turn.
+                    asyncio.create_task(
+                        self._finalize_watchdog()
+                    )
+
+        except asyncio.CancelledError:
+
+            logger.info(
+                "Barge-in listener stopped."
+            )
+
+            raise
+
+        except Exception:
+
+            logger.exception(
+                "Barge-in listener crashed."
+            )
+
+            raise
 
     async def _finalize_watchdog(self) -> None:
 
@@ -285,22 +299,22 @@ class VoicePipeline:
                 await self._run_task
 
             except asyncio.CancelledError:
-                
+
                 pass
 
             self._run_task = None
 
         # Stop the barge-in listener.
-        # if self._barge_in_task is not None:
+        if self._barge_in_task is not None:
 
-        #     self._barge_in_task.cancel()
+            self._barge_in_task.cancel()
 
-        #     try:
-        #         await self._barge_in_task
-        #     except asyncio.CancelledError:
-        #         pass
+            try:
+                await self._barge_in_task
+            except asyncio.CancelledError:
+                pass
 
-        #     self._barge_in_task = None
+            self._barge_in_task = None
 
         # Stop components in the pipeline.
         await self.microphone.stop()
