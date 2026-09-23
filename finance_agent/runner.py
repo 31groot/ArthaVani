@@ -55,7 +55,11 @@ class FinanceAgentRunner:
         if self._graph is not None:
             return
 
-        database_url = self._database_url or settings.DATABASE_URL
+        database_url = (
+            settings.DATABASE_URL
+            if self._database_url is None
+            else self._database_url
+        )
 
         if database_url:
             try:
