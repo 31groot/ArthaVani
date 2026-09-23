@@ -1,4 +1,4 @@
-import os
+from config.settings import settings
 import uuid
 import unittest
 from unittest.mock import patch
@@ -115,20 +115,20 @@ class PersistenceTests(unittest.IsolatedAsyncioTestCase):
         )
 
 
+@pytest.mark.postgres
 @pytest.mark.skipif(
-    not os.getenv("DATABASE_URL"),
+    not settings.DATABASE_URL,
     reason="Set DATABASE_URL to run the PostgreSQL integration test.",
 )
 @pytest.mark.asyncio
 async def test_postgres_survives_runner_restart():
-    database_url = os.environ["DATABASE_URL"]
+    database_url = settings.DATABASE_URL
     thread_id = f"pytest-{uuid.uuid4()}"
 
     first_model = ContextAwareChatModel()
     first_runner = FinanceAgentRunner(
         chat_model=first_model,
         tools=[],
-        database_url=database_url,
     )
     try:
         first = await first_runner.ainvoke(
@@ -143,7 +143,6 @@ async def test_postgres_survives_runner_restart():
     second_runner = FinanceAgentRunner(
         chat_model=second_model,
         tools=[],
-        database_url=database_url,
     )
     try:
         second = await second_runner.ainvoke(

@@ -1,7 +1,12 @@
-import os
+import pytest
 
-# Keep ordinary unit tests independent of the developer's local .env.
-# Explicit DATABASE_URL supplied by the shell is preserved so integration
-# tests can opt into PostgreSQL.
-if "DATABASE_URL" not in os.environ:
-    os.environ["DATABASE_URL"] = ""
+from config.settings import settings
+
+
+@pytest.fixture(autouse=True)
+def disable_postgres_for_unit_tests(request, monkeypatch):
+    """Keep ordinary tests independent of the local PostgreSQL instance."""
+    if request.node.get_closest_marker("postgres"):
+        return
+
+    monkeypatch.setattr(settings, "DATABASE_URL", None)
