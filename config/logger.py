@@ -12,7 +12,8 @@ def setup_logger() -> logging.Logger:
     if logger.hasHandlers():
         return logger
 
-    logger.setLevel(settings.LOG_LEVEL)
+    level_name = str(settings.LOG_LEVEL).upper()
+    logger.setLevel(logging._nameToLevel.get(level_name, logging.INFO))
 
     console_handler = logging.StreamHandler(sys.stderr)
 
