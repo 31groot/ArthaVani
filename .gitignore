@@ -13,3 +13,4 @@ third_party/kite-mcp-server/
 
 # Local runtime data
 data/
+frontend/node_modules/
