@@ -8,11 +8,12 @@ import uuid
 from contextlib import asynccontextmanager
 from typing import Annotated
 
-from fastapi import Depends, FastAPI, HTTPException, WebSocket, WebSocketDisconnect, status
+from fastapi import Depends, FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordRequestForm
 
 from api.groww import connect_once, disconnect, get_status, replace_connection
+from api.rate_limit import client_ip, login_limiter, register_limiter
 from api.schemas import (
     ChatRequest,
     ChatResponse,
@@ -25,13 +26,18 @@ from api.schemas import (
 from api.security import (
     create_access_token,
     get_current_user,
-    get_user_from_access_token,
+    aget_user_from_access_token,
     hash_password,
     verify_password,
 )
 from config.logger import logger
 from config.settings import settings
-from finance_agent.persistence import create_user, get_user_by_email, initialize_database
+from finance_agent.persistence import (
+    close_pool,
+    create_user,
+    get_user_by_email,
+    initialize_database,
+)
 from finance_agent.runner import FinanceAgentRunner
 from finance_agent.user_context import user_scope
 from finance_agent.providers.groww import build_groww_provider_from_credentials
@@ -92,6 +98,7 @@ async def lifespan(app: FastAPI):
         yield
     finally:
         await runner.stop()
+        close_pool()
         logger.info("ArthaVani FastAPI backend stopped.")
 
 
@@ -126,10 +133,13 @@ async def health() -> dict[str, str]:
     response_model=UserResponse,
     status_code=status.HTTP_201_CREATED,
 )
-async def register(payload: RegisterRequest) -> UserResponse:
+async def register(payload: RegisterRequest, request: Request) -> UserResponse:
     email = payload.email.lower().strip()
+    limiter_key = f"{client_ip(request)}:{email}"
+    register_limiter.check(limiter_key)
 
-    if get_user_by_email(email) is not None:
+    if await asyncio.to_thread(get_user_by_email, email) is not None:
+        register_limiter.record_failure(limiter_key)
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="An account with this email already exists.",
@@ -137,18 +147,21 @@ async def register(payload: RegisterRequest) -> UserResponse:
 
     user_id = str(uuid.uuid4())
     try:
-        user = create_user(
+        user = await asyncio.to_thread(
+            create_user,
             user_id=user_id,
             email=email,
             password_hash=hash_password(payload.password.get_secret_value()),
         )
     except Exception as exc:
         logger.exception("Failed to create user.")
+        register_limiter.record_failure(limiter_key)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Could not create the account.",
         ) from exc
 
+    register_limiter.record_success(limiter_key)
     return UserResponse(
         id=user["id"],
         email=user["email"],
@@ -158,21 +171,27 @@ async def register(payload: RegisterRequest) -> UserResponse:
 
 @app.post("/api/v1/auth/token", response_model=TokenResponse)
 async def login(
+    request: Request,
     form: Annotated[OAuth2PasswordRequestForm, Depends()],
 ) -> TokenResponse:
     email = form.username.lower().strip()
-    user = get_user_by_email(email)
+    limiter_key = f"{client_ip(request)}:{email}"
+    login_limiter.check(limiter_key)
+
+    user = await asyncio.to_thread(get_user_by_email, email)
 
     if user is None or not verify_password(
         form.password,
         user["password_hash"],
     ):
+        login_limiter.record_failure(limiter_key)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password.",
             headers={"WWW-Authenticate": "Bearer"},
         )
 
+    login_limiter.record_success(limiter_key)
     return TokenResponse(
         access_token=create_access_token(user["id"]),
         token_type="bearer",
@@ -193,7 +212,65 @@ async def me(user: CurrentUser) -> UserResponse:
     response_model=GrowwConnectionResponse,
 )
 async def groww_status(user: CurrentUser) -> GrowwConnectionResponse:
-    return GrowwConnectionResponse(**get_status(user["id"]))
+    result = await asyncio.to_thread(get_status, user["id"])
+    return GrowwConnectionResponse(**result)
+
+
+def _extract_groww_credentials(payload: GrowwConnectRequest) -> dict[str, str]:
+    """Shared validation/extraction for connect and replace payloads."""
+    if payload.auth_mode == "api_key_secret":
+        if payload.api_key is None or payload.api_secret is None:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="api_key and api_secret are required for api_key_secret mode.",
+            )
+        return {
+            "api_key": payload.api_key.get_secret_value(),
+            "api_secret": payload.api_secret.get_secret_value(),
+        }
+
+    if payload.totp_token is None or payload.totp_secret is None:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="totp_token and totp_secret are required for totp mode.",
+        )
+    return {
+        "totp_token": payload.totp_token.get_secret_value(),
+        "totp_secret": payload.totp_secret.get_secret_value(),
+    }
+
+
+def _validate_groww_credentials_sync(
+    auth_mode: str,
+    credentials: dict[str, str],
+) -> None:
+    """Blocking network call to Groww to confirm the credentials work."""
+    groww = build_groww_provider_from_credentials(auth_mode, credentials)
+    groww.get_holdings()
+
+
+async def _validate_groww_credentials(
+    user_id: str,
+    auth_mode: str,
+    credentials: dict[str, str],
+    *,
+    on_failure_detail: str,
+) -> None:
+    """Validate credentials against Groww off the event loop, or raise 400."""
+    try:
+        await asyncio.to_thread(
+            _validate_groww_credentials_sync, auth_mode, credentials
+        )
+    except Exception as exc:
+        logger.warning(
+            "Groww credential validation failed for user=%s: %s",
+            user_id,
+            type(exc).__name__,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=on_failure_detail,
+        ) from exc
 
 
 @app.post(
@@ -204,47 +281,18 @@ async def groww_connect(
     payload: GrowwConnectRequest,
     user: CurrentUser,
 ) -> GrowwConnectionResponse:
-    if payload.auth_mode == "api_key_secret":
-        if payload.api_key is None or payload.api_secret is None:
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail="api_key and api_secret are required for api_key_secret mode.",
-            )
-        credentials = {
-            "api_key": payload.api_key.get_secret_value(),
-            "api_secret": payload.api_secret.get_secret_value(),
-        }
-
-    else:
-        if payload.totp_token is None or payload.totp_secret is None:
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail="totp_token and totp_secret are required for totp mode.",
-            )
-        credentials = {
-            "totp_token": payload.totp_token.get_secret_value(),
-            "totp_secret": payload.totp_secret.get_secret_value(),
-        }
+    credentials = _extract_groww_credentials(payload)
 
     # Verify the credentials against Groww before persisting them.
-    try:
-        groww = build_groww_provider_from_credentials(
-            payload.auth_mode,
-            credentials,
-        )
-        groww.get_holdings()
-    except Exception as exc:
-        logger.warning(
-            "Groww connection validation failed for user=%s: %s",
-            user["id"],
-            type(exc).__name__,
-        )
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Groww credentials could not be validated.",
-        ) from exc
+    await _validate_groww_credentials(
+        user["id"],
+        payload.auth_mode,
+        credentials,
+        on_failure_detail="Groww credentials could not be validated.",
+    )
 
-    result = connect_once(
+    result = await asyncio.to_thread(
+        connect_once,
         user_id=user["id"],
         auth_mode=payload.auth_mode,
         credentials=credentials,
@@ -261,45 +309,20 @@ async def groww_replace(
     user: CurrentUser,
 ) -> GrowwConnectionResponse:
     """Validate and replace the current user's Groww credentials."""
-    if payload.auth_mode == "api_key_secret":
-        if payload.api_key is None or payload.api_secret is None:
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail="api_key and api_secret are required for api_key_secret mode.",
-            )
-        credentials = {
-            "api_key": payload.api_key.get_secret_value(),
-            "api_secret": payload.api_secret.get_secret_value(),
-        }
-    else:
-        if payload.totp_token is None or payload.totp_secret is None:
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail="totp_token and totp_secret are required for totp mode.",
-            )
-        credentials = {
-            "totp_token": payload.totp_token.get_secret_value(),
-            "totp_secret": payload.totp_secret.get_secret_value(),
-        }
+    credentials = _extract_groww_credentials(payload)
 
-    try:
-        groww = build_groww_provider_from_credentials(
-            payload.auth_mode,
-            credentials,
-        )
-        groww.get_holdings()
-    except Exception as exc:
-        logger.warning(
-            "Groww credential replacement validation failed for user=%s: %s",
-            user["id"],
-            type(exc).__name__,
-        )
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="New Groww credentials could not be validated. Existing credentials were kept.",
-        ) from exc
+    await _validate_groww_credentials(
+        user["id"],
+        payload.auth_mode,
+        credentials,
+        on_failure_detail=(
+            "New Groww credentials could not be validated. "
+            "Existing credentials were kept."
+        ),
+    )
 
-    result = replace_connection(
+    result = await asyncio.to_thread(
+        replace_connection,
         user_id=user["id"],
         auth_mode=payload.auth_mode,
         credentials=credentials,
@@ -309,7 +332,7 @@ async def groww_replace(
 
 @app.delete("/api/v1/integrations/groww", status_code=status.HTTP_204_NO_CONTENT)
 async def groww_disconnect(user: CurrentUser) -> None:
-    disconnect(user["id"])
+    await asyncio.to_thread(disconnect, user["id"])
 
 
 @app.get("/api/v1/portfolio/summary")
@@ -345,7 +368,7 @@ async def voice(websocket: WebSocket) -> None:
         return
 
     try:
-        user = get_user_from_access_token(token)
+        user = await aget_user_from_access_token(token)
     except HTTPException as exc:
         await websocket.send_json(
             {"type": "error", "message": exc.detail}
@@ -368,6 +391,7 @@ async def voice(websocket: WebSocket) -> None:
             websocket,
             user_id=user["id"],
             conversation_id=conversation_id,
+            agent_runner=runner,
         )
     except WebSocketDisconnect:
         return
