@@ -857,7 +857,7 @@ function NewsCard({ title, icon, items, loading, compact }) {
                 <span className="publisher">{item.publisher || "Yahoo Finance"}</span>
                 <span className="news-time">{formatNewsTime(item.published)}</span>
               </div>
-              <a href={item.url || "#"} target="_blank" rel="noreferrer">
+              <a href={safeExternalUrl(item.url)} target="_blank" rel="noopener noreferrer">
                 {item.title}
               </a>
               {item.ticker && <span className="news-ticker">{item.ticker}</span>}
@@ -1392,6 +1392,19 @@ function formatNewsTime(value) {
   const hours = Math.floor(minutes / 60);
   if (hours < 24) return `${hours}h`;
   return `${Math.floor(hours / 24)}d`;
+}
+
+function safeExternalUrl(value) {
+  if (!value) return "#";
+  try {
+    const parsed = new URL(value, window.location.href);
+    if (parsed.protocol === "http:" || parsed.protocol === "https:") {
+      return parsed.href;
+    }
+  } catch {
+    // fall through to the safe default below
+  }
+  return "#";
 }
 
 function RefreshIcon() {
