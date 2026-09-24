@@ -48,60 +48,6 @@ def _yahoo_equity_symbol(exchange: str, trading_symbol: str) -> str:
     return f"{trading_symbol.strip().upper()}{suffix}"
 
 
-@tool
-def groww_get_holdings() -> dict[str, Any]:
-    """Get the user's current Groww long-term equity holdings."""
-    return get_groww_provider().get_holdings()
-
-
-@tool
-def groww_get_positions(segment: str | None = None) -> dict[str, Any]:
-    """Get current Groww positions, optionally filtered to CASH or FNO."""
-    return get_groww_provider().get_positions(segment)
-
-
-@tool
-def groww_get_quote(
-    exchange: str,
-    segment: str,
-    trading_symbol: str,
-) -> dict[str, Any]:
-    """Get a real-time Groww quote for one instrument."""
-    return get_groww_provider().get_quote(exchange, segment, trading_symbol)
-
-
-@tool
-def groww_get_ltp(
-    segment: str,
-    exchange_trading_symbols: list[str],
-) -> dict[str, Any]:
-    """Get last traded prices for up to 50 Groww instruments."""
-    return get_groww_provider().get_ltp(
-        segment,
-        exchange_trading_symbols,
-    )
-
-
-@tool
-def groww_get_historical_data(
-    exchange: str,
-    segment: str,
-    trading_symbol: str,
-    start_time: str,
-    end_time: str,
-    interval_in_minutes: int | None = None,
-) -> dict[str, Any]:
-    """Get historical OHLCV candles from Groww."""
-    return get_groww_provider().get_historical_data(
-        exchange,
-        segment,
-        trading_symbol,
-        start_time,
-        end_time,
-        interval_in_minutes,
-    )
-
-
 def _portfolio_snapshot() -> dict[str, Any]:
     try:
         holdings_payload = get_groww_provider().get_holdings()
