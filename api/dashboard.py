@@ -56,6 +56,7 @@ async def build_dashboard(user_id: str) -> dict[str, Any]:
                 row["ticker"] = symbol
             return rows
         except Exception:
+            logger.exception("Holding news fetch failed for %s.", symbol)
             return []
 
     batches = await asyncio.gather(
