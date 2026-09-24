@@ -157,6 +157,11 @@ class TTSWorker:
                         len(audio_chunk),
                     )
 
+            if chunk_count == 0:
+                raise RuntimeError(
+                    "TTS synthesis completed without producing PCM audio."
+                )
+
             logger.info(
                 "TTS audio stream queued: %d chunks / %d bytes.",
                 chunk_count,

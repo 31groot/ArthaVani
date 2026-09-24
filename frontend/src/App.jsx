@@ -902,10 +902,12 @@ function AssistantCard() {
   const [voiceError, setVoiceError] = useState("");
   const [ttsActive, setTtsActive] = useState(false);
   const socketRef = useRef(null);
+  const voiceStartingRef = useRef(false);
   const streamRef = useRef(null);
   const audioContextRef = useRef(null);
   const captureNodeRef = useRef(null);
   const playbackNodeRef = useRef(null);
+  const playbackGainRef = useRef(null);
   const playbackSourcesRef = useRef(new Set());
   const playbackEndTimeRef = useRef(0);
 
@@ -923,49 +925,47 @@ function AssistantCard() {
     };
   }, []);
 
-  function stopPlayback() {
-    for (const source of playbackSourcesRef.current) {
-      try { source.stop(); } catch {}
-      try { source.disconnect(); } catch {}
+  function setPlaybackVolume(level, rampSeconds = 0.04) {
+    const audioContext = audioContextRef.current;
+    const gainNode = playbackGainRef.current;
+    if (!audioContext || !gainNode || audioContext.state === "closed") return;
+
+    const clamped = Math.max(0, Math.min(1, Number(level)));
+    const now = audioContext.currentTime;
+    try {
+      gainNode.gain.cancelScheduledValues(now);
+      gainNode.gain.setTargetAtTime(clamped, now, Math.max(0.01, rampSeconds));
+    } catch {
+      gainNode.gain.value = clamped;
     }
-    playbackSourcesRef.current.clear();
+  }
+
+  function stopPlayback() {
+    const node = playbackNodeRef.current;
+    if (node) {
+      try {
+        node.port.postMessage({ type: "clear" });
+      } catch {}
+    }
     playbackEndTimeRef.current = 0;
   }
 
   function queuePcmAudio(arrayBuffer) {
+    const node = playbackNodeRef.current;
     const audioContext = audioContextRef.current;
-    if (!audioContext || audioContext.state === "closed") return;
+    if (!node || !audioContext || audioContext.state === "closed") return;
+    if (!(arrayBuffer instanceof ArrayBuffer) || arrayBuffer.byteLength < 2) return;
 
-    let byteLength = arrayBuffer.byteLength;
-    if (byteLength < 2) return;
-    if (byteLength % 2 !== 0) byteLength -= 1;
-
-    const pcm = new Int16Array(arrayBuffer, 0, byteLength / 2);
-    const audioBuffer = audioContext.createBuffer(1, pcm.length, 16000);
-    const channel = audioBuffer.getChannelData(0);
-    for (let i = 0; i < pcm.length; i += 1) {
-      channel[i] = pcm[i] / 32768;
+    const buffer = arrayBuffer.slice(0);
+    try {
+      node.port.postMessage(buffer, [buffer]);
+    } catch (err) {
+      console.error("Failed to queue TTS PCM audio", err);
     }
-
-    const source = audioContext.createBufferSource();
-    source.buffer = audioBuffer;
-    source.connect(audioContext.destination);
-
-    const startAt = Math.max(
-      audioContext.currentTime + 0.01,
-      playbackEndTimeRef.current
-    );
-    source.start(startAt);
-    playbackEndTimeRef.current = startAt + audioBuffer.duration;
-
-    playbackSourcesRef.current.add(source);
-    source.onended = () => {
-      playbackSourcesRef.current.delete(source);
-      try { source.disconnect(); } catch {}
-    };
   }
 
   async function stopListening() {
+    voiceStartingRef.current = false;
     const socket = socketRef.current;
     socketRef.current = null;
 
@@ -979,10 +979,13 @@ function AssistantCard() {
     }
 
     stopPlayback();
+    setPlaybackVolume(1.0, 0.02);
     captureNodeRef.current?.disconnect();
     playbackNodeRef.current?.disconnect();
+    playbackGainRef.current?.disconnect();
     captureNodeRef.current = null;
     playbackNodeRef.current = null;
+    playbackGainRef.current = null;
 
     streamRef.current?.getTracks().forEach((track) => track.stop());
     streamRef.current = null;
@@ -1037,13 +1040,22 @@ function AssistantCard() {
       return;
     }
 
+    // Prevent double-clicks/rerenders from opening multiple browser voice
+    // WebSockets before the first one reaches the ready state.
+    if (voiceStartingRef.current) {
+      return;
+    }
+    voiceStartingRef.current = true;
+
     if (!voiceSupported) {
+      voiceStartingRef.current = false;
       setVoiceError("Live voice needs microphone access and AudioWorklet support. Use Chrome/Edge on localhost or HTTPS.");
       return;
     }
 
     const token = getToken();
     if (!token) {
+      voiceStartingRef.current = false;
       setVoiceError("Please sign in before starting live voice.");
       return;
     }
@@ -1070,11 +1082,12 @@ function AssistantCard() {
           channelCount: 1,
           echoCancellation: true,
           noiseSuppression: true,
-          autoGainControl: true,
+          autoGainControl: false,
         },
       });
 
       await audioContext.audioWorklet.addModule("/pcm-capture-worklet.js");
+      await audioContext.audioWorklet.addModule("/pcm-playback-worklet.js");
 
       socket = new WebSocket(voiceSocketUrl());
       socket.binaryType = "arraybuffer";
@@ -1107,10 +1120,22 @@ function AssistantCard() {
           return;
         }
         if (message.type === "speech_detected") {
+          setPlaybackVolume(message.level ?? 0.2);
           setWorking(true);
           return;
         }
+        if (message.type === "duck") {
+          setPlaybackVolume(message.level ?? 0.2);
+          return;
+        }
+        if (message.type === "unduck") {
+          setPlaybackVolume(1.0);
+          return;
+        }
         if (message.type === "barge_in") {
+          // Hard-cut the existing assistant audio immediately. The backend
+          // emits this before waiting for LLM/TTS cancellation.
+          setPlaybackVolume(0.0, 0.01);
           stopPlayback();
           setTtsActive(false);
           setWorking(true);
@@ -1136,14 +1161,18 @@ function AssistantCard() {
           return;
         }
         if (message.type === "tts_started") {
+          setPlaybackVolume(1.0, 0.03);
           setTtsActive(true);
           return;
         }
+        if (message.type === "tts_server_drained") {
+          try {
+            playbackNode?.port.postMessage({ type: "drain" });
+          } catch {}
+          return;
+        }
         if (message.type === "tts_finished") {
-          const delayMs = Math.max(0, (playbackEndTimeRef.current - audioContext.currentTime) * 1000);
-          window.setTimeout(() => {
-            if (audioContextRef.current === audioContext) setTtsActive(false);
-          }, delayMs);
+          setPlaybackVolume(1.0, 0.03);
           return;
         }
         if (message.type === "tts_error") {
@@ -1165,6 +1194,7 @@ function AssistantCard() {
         setTtsActive(false);
         if (socketRef.current === socket) {
           socketRef.current = null;
+          voiceStartingRef.current = false;
           setListening(false);
         }
       };
@@ -1206,9 +1236,29 @@ function AssistantCard() {
       keepAliveGain = audioContext.createGain();
       keepAliveGain.gain.value = 0;
 
+      const playbackGain = audioContext.createGain();
+      playbackGain.gain.value = 1.0;
+
+      playbackNode = new AudioWorkletNode(audioContext, "pcm16-playback", {
+        processorOptions: { sourceSampleRate: 16000 },
+      });
+      playbackNode.port.onmessage = (event) => {
+        if (event.data?.type === "drained") {
+          if (audioContextRef.current === audioContext) {
+            try {
+              if (socket.readyState === WebSocket.OPEN) {
+                socket.send(JSON.stringify({ type: "tts_playback_drained" }));
+              }
+            } catch {}
+          }
+        }
+      };
+
       source.connect(captureNode);
       captureNode.connect(keepAliveGain);
       keepAliveGain.connect(audioContext.destination);
+      playbackNode.connect(playbackGain);
+      playbackGain.connect(audioContext.destination);
 
       captureNode.port.onmessage = (event) => {
         if (captureReady && socket.readyState === WebSocket.OPEN) {
@@ -1220,14 +1270,18 @@ function AssistantCard() {
       streamRef.current = stream;
       audioContextRef.current = audioContext;
       captureNodeRef.current = captureNode;
-      playbackNodeRef.current = null;
+      playbackNodeRef.current = playbackNode;
+      playbackGainRef.current = playbackGain;
     } catch (err) {
       try { socket?.close(); } catch {}
       stopPlayback();
       captureNode?.disconnect();
       keepAliveGain?.disconnect();
+      playbackGainRef.current?.disconnect();
+      playbackGainRef.current = null;
       stream?.getTracks().forEach((track) => track.stop());
       try { await audioContext?.close(); } catch {}
+      voiceStartingRef.current = false;
       setListening(false);
       setVoiceError(
         err?.name === "NotAllowedError"

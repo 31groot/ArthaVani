@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from api.dashboard import dashboard_endpoint
 
+import asyncio
 import uuid
 from contextlib import asynccontextmanager
 from typing import Annotated
@@ -39,6 +40,47 @@ from voice.web_pipeline import run_browser_voice_session
 
 
 runner = FinanceAgentRunner()
+
+# Only one browser voice session may own a given user/conversation at a time.
+# This prevents duplicate WebSocket sessions after refreshes/double clicks from
+# running two STT/LLM/TTS pipelines against the same persisted conversation.
+_active_voice_sessions: dict[tuple[str, str], WebSocket] = {}
+_active_voice_sessions_lock = asyncio.Lock()
+
+
+async def _claim_voice_session(
+    user_id: str,
+    conversation_id: str,
+    websocket: WebSocket,
+) -> None:
+    key = (user_id, conversation_id)
+    old_socket = None
+
+    async with _active_voice_sessions_lock:
+        old_socket = _active_voice_sessions.get(key)
+        _active_voice_sessions[key] = websocket
+
+    if old_socket is not None and old_socket is not websocket:
+        logger.info(
+            "Replacing existing browser voice session for user=%s conversation=%s.",
+            user_id,
+            conversation_id,
+        )
+        try:
+            await old_socket.close(code=4001, reason="Replaced by a newer voice session.")
+        except Exception:
+            logger.debug("Previous browser voice socket was already closed.", exc_info=True)
+
+
+async def _release_voice_session(
+    user_id: str,
+    conversation_id: str,
+    websocket: WebSocket,
+) -> None:
+    key = (user_id, conversation_id)
+    async with _active_voice_sessions_lock:
+        if _active_voice_sessions.get(key) is websocket:
+            _active_voice_sessions.pop(key, None)
 
 
 @asynccontextmanager
@@ -315,6 +357,12 @@ async def voice(websocket: WebSocket) -> None:
     if not isinstance(conversation_id, str) or not conversation_id.strip():
         conversation_id = "default"
 
+    await _claim_voice_session(
+        user_id=user["id"],
+        conversation_id=conversation_id,
+        websocket=websocket,
+    )
+
     try:
         await run_browser_voice_session(
             websocket,
@@ -338,6 +386,12 @@ async def voice(websocket: WebSocket) -> None:
             await websocket.close(code=1011)
         except Exception:
             pass
+    finally:
+        await _release_voice_session(
+            user_id=user["id"],
+            conversation_id=conversation_id,
+            websocket=websocket,
+        )
 
 
 @app.post("/api/v1/chat", response_model=ChatResponse)
