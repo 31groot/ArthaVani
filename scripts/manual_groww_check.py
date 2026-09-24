@@ -1,3 +1,14 @@
+"""Manual live-check script for Groww API credentials.
+
+This is NOT a pytest test — it makes real network calls to the Groww API
+and requires valid credentials in the environment. It was previously
+named tests/test_groww.py, which caused pytest to collect and execute it
+at import time, breaking CI whenever GROWW_API_KEY/GROWW_API_SECRET were
+unset. Run it manually with:
+
+    python scripts/manual_groww_check.py
+"""
+
 from config.settings import settings
 
 from dotenv import load_dotenv

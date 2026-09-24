@@ -12,11 +12,11 @@ from finance_agent.runner import FinanceAgentRunner
 
 
 async def main():
-    question = " ".join(sys.argv[1:]) or "What's my checking account balance?"
+    question = " ".join(sys.argv[1:]) or "What's the current price of RELIANCE?"
 
     print(f"Question: {question!r}")
-    print("Starting finance agent (this spawns the MCP server subprocess "
-          "and calls Groq)...")
+    print("Starting finance agent (this calls the configured LLM provider "
+          "and finance tools)...")
 
     runner = FinanceAgentRunner()
 
