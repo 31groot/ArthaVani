@@ -20,6 +20,7 @@ class LLMWorker:
         conversation_identity: ConversationIdentity,
         on_user_text: Callable[[str], Awaitable[None] | None] | None = None,
         on_assistant_text: Callable[[str], Awaitable[None] | None] | None = None,
+        agent_runner: FinanceAgentRunner | None = None,
     ):
         # Identifies this voice session's conversation to the
         # AsyncPostgresSaver checkpointer, so every turn is appended to
@@ -34,6 +35,10 @@ class LLMWorker:
         # The desktop pipeline leaves these as None.
         self.on_user_text = on_user_text
         self.on_assistant_text = on_assistant_text
+
+        # Use the injected runner if given; otherwise create and own one.
+        self._owns_runner = agent_runner is None
+        self.agent_runner = agent_runner or FinanceAgentRunner()
 
         # Converts streamed LLM text into sentence-sized pieces
         # that can be sent to the TTS pipeline incrementally.
@@ -53,10 +58,6 @@ class LLMWorker:
         # Queue containing transcript events produced by the
         # speech-to-text system.
         self.transcript_queue = transcript_queue
-
-        # FinanceAgentRunner is responsible for actually calling
-        # the LLM and available finance tools.
-        self.agent_runner = FinanceAgentRunner()
 
         # Main long-running task that listens for transcripts.
         self._task: asyncio.Task | None = None
@@ -125,12 +126,12 @@ class LLMWorker:
                     await self._generation_task
                 except asyncio.CancelledError:
                     pass
-
-            # IMPORTANT:
-            #
+            
             # Close the FinanceAgentRunner/checkpointer connection
             # from this SAME worker task that started it.
-            await self.agent_runner.stop()
+            if self._owns_runner:
+                await self.agent_runner.stop()
+
 
     async def _generate(self, user_text: str) -> None:
 
