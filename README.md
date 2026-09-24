@@ -1,33 +1,143 @@
 # ArthaVani
 
-ArthaVani is a real-time voice finance assistant built around LangGraph, native Python finance tools, Deepgram speech recognition, Silero VAD, WebRTC echo cancellation, and Edge TTS.
+ArthaVani is a full-stack AI finance assistant for Indian markets. It combines a FastAPI backend, a React dashboard, LangGraph, native Python finance tools, PostgreSQL conversation persistence, authenticated Groww connections, streaming speech recognition, Silero VAD, Edge TTS, and a browser voice transport built on WebSockets.
 
-The web application has two runtime pieces:
+The project is designed to support two voice modes:
+
+- **Desktop/local voice:** microphone and speaker devices are handled directly by the Python voice pipeline.
+- **Browser voice:** the React app captures microphone audio with `AudioWorklet`, streams PCM audio over a WebSocket to FastAPI, and receives synthesized PCM audio back for browser playback.
+
+WebRTC audio processing is used for echo-cancellation/noise-processing support in the Python audio stack; the browser transport itself is a WebSocket transport, not a WebRTC peer connection.
+
+---
+
+## Architecture
 
 ```text
-Browser (React + Vite)
-  -> FastAPI REST + WebSocket API
-  -> LangGraph + native finance tools
-  -> Groww / Yahoo Finance / AMFI / FX providers
-  -> PostgreSQL conversation checkpoints
+                         ArthaVani
+                            │
+             ┌──────────────┴──────────────┐
+             │                             │
+       React + Vite                    FastAPI
+             │                             │
+       REST + WebSocket             Auth / Dashboard
+             │                             │
+             └──────────────┬──────────────┘
+                            │
+                    LangGraph agent
+                            │
+                    Native Python tools
+                            │
+        ┌───────────────┬───┴────┬───────────────┐
+        │               │        │               │
+      Groww        Yahoo Finance AMFI          FX / NSE
+        │
+        └──────────────┬────────────────────────┘
+                       │
+                 PostgreSQL
+          auth + Groww connection metadata
+          + LangGraph conversation state
 
-Browser microphone
-  -> VAD / AEC / Deepgram STT
-  -> LangGraph agent
-  -> Edge TTS
-  -> Browser speaker
+Browser voice:
+
+Microphone
+   │
+   ▼
+AudioWorklet → WebSocket → FastAPI voice session
+                              │
+                              ├─ Silero VAD
+                              ├─ Deepgram streaming STT
+                              ├─ LangGraph + finance tools
+                              └─ Edge TTS
+                                      │
+                                      ▼
+                              WebSocket PCM audio
+                                      │
+                                      ▼
+                              Browser AudioWorklet
 ```
 
-Finance providers live under `finance_agent/providers/` and are exposed to LangGraph through `finance_agent/tools.py`.
+---
+
+## Main capabilities
+
+### Finance assistant
+
+The agent can work with:
+
+- portfolio summary and portfolio risk
+- live/near-current Indian equity quotes
+- company fundamentals
+- historical prices
+- technical analysis
+- market and ticker news
+- AMFI mutual-fund NAVs and NAV history
+- currency conversion
+- NSE market status
+- persistent, user-scoped price alerts
+
+The LLM-facing finance tools are implemented as native Python tools in `finance_agent/tools.py` rather than through MCP.
+
+When Groww live market quotes are unavailable, the portfolio flow can use an explicitly labelled Yahoo Finance fallback for valuation. The tool output keeps the price source visible instead of presenting fallback data as Groww live data.
+
+### Authentication and user data
+
+The FastAPI layer provides:
+
+- account registration and login
+- JWT authentication
+- password hashing with Argon2 via `pwdlib`
+- authenticated REST endpoints
+- authenticated browser voice sessions
+- per-user Groww connections
+- encrypted Groww credentials at rest using Fernet
+
+Groww credentials are stored server-side and are not returned to the browser after a successful connection.
+
+### Conversation memory
+
+LangGraph conversation state is persisted with PostgreSQL through `AsyncPostgresSaver`.
+
+Conversation identity is scoped as:
+
+```text
+user:{user_id}:conversation:{conversation_id}
+```
+
+This keeps conversation history separated by authenticated user and conversation.
+
+Local price alerts use a separate SQLite store and are scoped to the authenticated user.
+
+---
 
 ## Requirements
 
 - Python 3.11+
 - Node.js 22+
-- Docker + Docker Compose (for local PostgreSQL)
-- API credentials for the services you plan to use: Groq, Deepgram, and Groww
+- PostgreSQL 16+ or Docker Desktop / Docker Engine
+- API credentials for the services you intend to use
 
-## 1. Clone and create the Python environment
+Typical backend credentials include:
+
+```text
+GROQ_API_KEY
+DEEPGRAM_API_KEY
+API_JWT_SECRET_KEY
+GROWW_CREDENTIALS_ENCRYPTION_KEY
+```
+
+Groww credentials are supplied through the authenticated UI rather than committed to `.env`.
+
+---
+
+## 1. Clone the repository
+
+```bash
+git clone https://github.com/31groot/ArthaVani.git
+cd ArthaVani
+```
+
+Create and activate the Python environment:
 
 ```bash
 python -m venv .venv
@@ -39,31 +149,49 @@ python -m pip install -r requirements-dev.txt
 On Windows PowerShell:
 
 ```powershell
-.venv\\Scripts\\Activate.ps1
+.venv\Scripts\Activate.ps1
 python -m pip install --upgrade pip
 python -m pip install -r requirements-dev.txt
 ```
 
-`requirements-dev.txt` installs the runtime, API, test, lint, and formatting dependencies.
+---
 
 ## 2. Start PostgreSQL
+
+The repository includes a development Docker Compose configuration:
 
 ```bash
 docker compose up -d postgres
 docker compose ps
 ```
 
-PostgreSQL is exposed at `localhost:5432` with the development credentials from `docker-compose.yml`.
+The development database is exposed on:
 
-## 3. Configure backend environment variables
+```text
+localhost:5432
+```
 
-Copy the example file:
+with:
+
+```text
+Database: arthavani
+User:     arthavani
+Password: arthavani
+```
+
+A local PostgreSQL installation can also be used; point `DATABASE_URL` at it instead.
+
+---
+
+## 3. Configure the backend
+
+Copy the example environment file:
 
 ```bash
 cp .env.example .env
 ```
 
-Set at least:
+At minimum, configure:
 
 ```env
 DATABASE_URL=postgresql://arthavani:arthavani@localhost:5432/arthavani
@@ -73,19 +201,23 @@ API_JWT_SECRET_KEY=...
 GROWW_CREDENTIALS_ENCRYPTION_KEY=...
 ```
 
-Generate the Fernet key with:
+Generate a Fernet encryption key with:
 
 ```bash
 python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
 ```
 
-`API_CORS_ORIGINS` should include the Vite development origin, for example:
+For local frontend development, allow the Vite origin:
 
 ```env
 API_CORS_ORIGINS=["http://localhost:5173"]
 ```
 
-## 4. Start the FastAPI backend
+Do not commit `.env` or real API credentials.
+
+---
+
+## 4. Start the backend
 
 From the repository root:
 
@@ -94,99 +226,302 @@ source .venv/bin/activate
 uvicorn api.main:app --reload --host 127.0.0.1 --port 8000
 ```
 
-The API is then available at `http://127.0.0.1:8000` and the browser voice WebSocket is served by the same FastAPI process.
+The FastAPI API is available at:
 
-> `python main.py` starts the lower-level local `VoicePipeline` entry point. For the full React + FastAPI web application, use `uvicorn api.main:app` as shown above.
+```text
+http://127.0.0.1:8000
+```
 
-## 5. Configure and start the frontend
+Interactive API documentation:
 
-In a second terminal:
+```text
+http://127.0.0.1:8000/docs
+```
+
+Health check:
+
+```bash
+curl http://127.0.0.1:8000/health
+```
+
+The browser voice WebSocket is exposed by the same FastAPI process at:
+
+```text
+/api/v1/voice
+```
+
+For the lower-level local Python voice application, `main.py` starts `VoicePipeline` directly:
+
+```bash
+python main.py
+```
+
+That entry point uses the local microphone/speaker pipeline and is separate from the React browser transport.
+
+---
+
+## 5. Start the frontend
+
+Open a second terminal:
 
 ```bash
 cd frontend
-cp .env.example .env
 npm install
 npm run dev
 ```
 
-The Vite app runs at `http://localhost:5173` and proxies `/api` and WebSocket traffic to the FastAPI backend on port 8000.
-
-If `package.json` has changed after pulling the repository, run `npm install` once so `package-lock.json` is refreshed before using `npm ci` in other environments.
-
-## 6. Typical local workflow
+The Vite development server normally runs at:
 
 ```text
-Terminal 1: docker compose up -d postgres
-Terminal 2: uvicorn api.main:app --reload --port 8000
-Terminal 3: cd frontend && npm install && npm run dev
-Browser:   http://localhost:5173
+http://localhost:5173
 ```
 
-After registering, connect Groww from the UI. Groww credentials are encrypted before storage and are not returned to the browser after a successful connection.
+The frontend reads the backend URL from `frontend/.env` when `VITE_API_BASE_URL` is provided. The default example is:
+
+```env
+VITE_API_BASE_URL=http://127.0.0.1:8000
+```
+
+For local browser voice, use a browser with microphone and AudioWorklet support, such as current Chrome or Edge. Microphone access requires a secure context in production; `localhost` is suitable for local development.
+
+---
+
+## 6. First-run flow
+
+```text
+Register / sign in
+        ↓
+Connect Groww once
+        ↓
+Dashboard
+        ↓
+Portfolio + market data + news
+        ↓
+Ask ArthaVani by text or live voice
+```
+
+After a successful Groww connection, the encrypted credentials remain on the backend so the user does not have to reconnect on every login.
+
+---
+
+## Browser voice pipeline
+
+The current browser voice implementation is intentionally simpler than a browser WebRTC deployment.
+
+```text
+Browser microphone
+       ↓
+AudioWorklet PCM capture
+       ↓
+Authenticated WebSocket
+       ↓
+FastAPI browser voice session
+       ↓
+Silero VAD + Deepgram STT
+       ↓
+LangGraph + native finance tools
+       ↓
+Sentence splitter + Edge TTS
+       ↓
+PCM audio over WebSocket
+       ↓
+Browser AudioWorklet playback
+```
+
+The browser and server exchange control messages for events such as:
+
+- authentication
+- readiness
+- interim transcript
+- final user text
+- assistant text
+- TTS start/finish
+- duck/unduck
+- barge-in
+- playback drain
+- errors
+
+Barge-in is handled on the server and client together so user speech can cut off buffered assistant audio and interrupt the active LLM/TTS work.
+
+---
+
+## API surface
+
+Important REST endpoints include:
+
+```text
+GET    /health
+POST   /api/v1/auth/register
+POST   /api/v1/auth/token
+GET    /api/v1/auth/me
+GET    /api/v1/integrations/groww
+POST   /api/v1/integrations/groww/connect
+DELETE /api/v1/integrations/groww
+GET    /api/v1/portfolio/summary
+POST   /api/v1/chat
+GET    /api/v1/dashboard
+```
+
+Browser voice:
+
+```text
+WebSocket /api/v1/voice
+```
+
+Use `/docs` for the generated OpenAPI documentation and request schemas.
+
+---
 
 ## Testing
 
-Run the backend tests:
+Run the complete backend test suite:
 
 ```bash
+source .venv/bin/activate
 pytest -q
 ```
 
-The PostgreSQL persistence test is skipped unless `DATABASE_URL` is configured. To exercise it explicitly:
+Compile-check the Python packages:
 
 ```bash
-DATABASE_URL=postgresql://arthavani:arthavani@localhost:5432/arthavani pytest -q tests/test_postgres_persistence.py
+python -m compileall api config finance_agent voice tests main.py
 ```
 
-The repository also contains deterministic evaluation suites under `evaluation/` for tool routing and answer grounding. Their checked-in result files document the benchmark runs used during development.
-
-## Code quality
-
-Python formatting and linting:
+Check whitespace before committing:
 
 ```bash
-black api config finance_agent voice tests main.py
-ruff check api config finance_agent voice tests main.py
+git diff --check
 ```
 
-React linting and formatting:
+The repository also contains deterministic evaluation suites under `evaluation/` for tool routing and answer grounding.
+
+---
+
+## Frontend build
+
+Create a production frontend bundle with:
 
 ```bash
 cd frontend
-npm run lint
-npm run format
-npm run format:check
+npm install
+npm run build
 ```
 
-CI runs the test suite, Python compile checks, Ruff, Black formatting checks, React linting, Prettier formatting checks, and the Vite production build.
-
-## Repository structure
+The generated static files are written to:
 
 ```text
-api/
-  main.py             # FastAPI app, REST endpoints, and browser voice WebSocket
-  dashboard.py        # dashboard aggregation endpoint
-  groww.py            # authenticated Groww connection lifecycle
-  security.py         # password hashing and JWT authentication
-  rate_limit.py       # registration/login rate limiting
-
-finance_agent/
-  graph.py            # LangGraph state graph
-  runner.py           # async agent runner + PostgreSQL checkpointing
-  tools.py            # LLM-facing native tools
-  providers/          # Groww, Yahoo, AMFI, FX, market, and watchlist providers
-
-voice/
-  audio/              # microphone, speaker, resampling, AEC
-  llm/                # conversation-to-agent bridge
-  stt/                # Deepgram streaming STT
-  text/               # streaming sentence splitting
-  tts/                # Edge TTS
-  vad/                # Silero speech detection
-
-frontend/src/
-  App.jsx             # session bootstrap and route orchestration
-  pages/              # auth and Groww connection screens
-  components/         # dashboard cards and live assistant UI
-  utils/              # shared formatting / URL helpers
+frontend/dist/
 ```
+
+---
+
+## CI
+
+GitHub Actions is defined in:
+
+```text
+.github/workflows/ci-cd.yml
+```
+
+The current workflow runs on pushes and pull requests targeting `main` and performs:
+
+1. PostgreSQL-backed backend dependency installation
+2. `pip check`
+3. Python compilation checks
+4. the backend `pytest` suite
+5. React dependency installation with `npm ci`
+6. the Vite production build
+7. upload of the frontend `dist/` directory as a build artifact for `main` pushes
+
+---
+
+## Repository layout
+
+```text
+ArthaVani/
+├── api/
+│   ├── main.py              # FastAPI app and REST/WebSocket routes
+│   ├── dashboard.py         # dashboard aggregation
+│   ├── groww.py             # Groww connection lifecycle
+│   ├── security.py          # password hashing and JWT handling
+│   └── rate_limit.py        # auth rate limiting
+│
+├── config/
+│   ├── constants.py         # audio/runtime constants
+│   ├── logger.py            # logging setup
+│   └── settings.py          # environment-backed settings
+│
+├── finance_agent/
+│   ├── graph.py             # LangGraph state graph
+│   ├── runner.py            # agent runner + PostgreSQL checkpointing
+│   ├── tools.py             # native LLM-facing finance tools
+│   ├── persistence.py       # users + Groww connection persistence
+│   ├── groww_credentials.py # encrypted Groww credentials
+│   └── providers/            # Groww, Yahoo, AMFI, FX, market, watchlist
+│
+├── voice/
+│   ├── audio/               # microphone, speaker, resampling, AEC
+│   ├── llm/                 # transcript → agent bridge
+│   ├── stt/                 # Deepgram streaming STT
+│   ├── text/                # sentence splitting
+│   ├── tts/                 # Edge TTS
+│   ├── vad/                 # Silero speech detection
+│   ├── pipeline.py          # local/native voice pipeline
+│   └── web_pipeline.py      # browser WebSocket voice pipeline
+│
+├── frontend/
+│   ├── src/pages/            # auth, dashboard, Groww screens
+│   ├── src/components/       # dashboard + assistant UI
+│   ├── public/               # audio capture/playback worklets
+│   └── src/api.js            # REST/WebSocket client helpers
+│
+├── evaluation/
+│   ├── BFCL/                # tool-routing evaluation
+│   └── answer_grounding/    # answer-grounding evaluation
+│
+├── tests/                   # unit, integration, API, voice tests
+├── docker-compose.yml       # local PostgreSQL
+├── requirements.txt         # runtime dependencies
+├── requirements-dev.txt     # runtime + development/test dependencies
+└── main.py                  # native/local voice entry point
+```
+
+---
+
+## Security notes
+
+- Passwords are hashed; plaintext passwords are not stored.
+- Groww credentials are encrypted at rest before database persistence.
+- API routes require JWT authentication where appropriate.
+- Browser voice authenticates its WebSocket session with the access token before processing audio.
+- Never commit `.env`, API keys, JWT signing secrets, Groww credentials, or database passwords for shared environments.
+- Replace the development PostgreSQL credentials before exposing the database outside a local development environment.
+
+---
+
+## Useful development commands
+
+```bash
+# Backend
+source .venv/bin/activate
+uvicorn api.main:app --reload --host 127.0.0.1 --port 8000
+
+# Tests
+pytest -q
+
+# Frontend
+cd frontend
+npm install
+npm run dev
+
+# Production frontend build
+npm run build
+```
+
+---
+
+## Project status
+
+ArthaVani currently combines a working authenticated web dashboard with a native finance-agent backend, PostgreSQL-backed conversation memory, authenticated Groww integration, deterministic evaluation suites, and a real-time browser voice path based on WebSocket streaming audio.
+
+The repository is intended as an AI engineering project demonstrating agent orchestration, tool calling, real-time voice processing, persistence, authentication, provider integration, evaluation, and full-stack delivery.
