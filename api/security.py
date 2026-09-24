@@ -1,6 +1,7 @@
 """Authentication helpers: Argon2 password hashing and JWT bearer tokens."""
 from __future__ import annotations
 
+import asyncio
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
@@ -72,7 +73,13 @@ def _decode_user_id(token: str) -> str:
 
 
 def get_user_from_access_token(token: str) -> dict[str, Any]:
-    """Resolve a bearer token for non-HTTP transports such as WebSocket."""
+    """Resolve a bearer token for non-HTTP transports such as WebSocket.
+
+    This performs a blocking database lookup; callers running inside an
+    asyncio event loop (the WebSocket handler, `get_current_user`) should
+    use `aget_user_from_access_token` instead so the lookup doesn't block
+    the loop.
+    """
     user_id = _decode_user_id(token)
     user = get_user_by_id(user_id)
     if user is None:
@@ -84,5 +91,18 @@ def get_user_from_access_token(token: str) -> dict[str, Any]:
     return user
 
 
+async def aget_user_from_access_token(token: str) -> dict[str, Any]:
+    """Async, non-blocking variant of `get_user_from_access_token`."""
+    user_id = _decode_user_id(token)
+    user = await asyncio.to_thread(get_user_by_id, user_id)
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="User no longer exists.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    return user
+
+
 async def get_current_user(token: str = Depends(oauth2_scheme)) -> dict[str, Any]:
-    return get_user_from_access_token(token)
+    return await aget_user_from_access_token(token)
