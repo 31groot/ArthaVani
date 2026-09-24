@@ -12,6 +12,9 @@ class TTSWorker:
         tts: EdgeTTS,
         sentence_queue: asyncio.Queue[SentenceEvent],
         audio_queue: asyncio.Queue[bytes],
+        on_audio_started=None,
+        on_audio_finished=None,
+        on_error=None,
     ):
 
         # EdgeTTS is responsible for converting text into speech
@@ -30,6 +33,11 @@ class TTSWorker:
         # Speaker consumes this queue.
         
         self.audio_queue = audio_queue
+
+        # Optional lifecycle callbacks used by the browser transport.
+        self.on_audio_started = on_audio_started
+        self.on_audio_finished = on_audio_finished
+        self.on_error = on_error
 
         # Main worker task.
         #
@@ -126,50 +134,50 @@ class TTSWorker:
         text: str,
     ) -> None:
 
-        # Track information about the generated audio stream.
         first_chunk = True
         chunk_count = 0
         total_bytes = 0
 
-        # EdgeTTS streams audio progressively.
-        #
-        # It does not wait for the entire sentence to finish
-        # before giving us audio.
-        async for audio_chunk in self.tts.stream(
-            text
-        ):
+        try:
+            async for audio_chunk in self.tts.stream(text):
+                if first_chunk:
+                    logger.info("TTS first audio chunk received.")
+                    first_chunk = False
+                    if self.on_audio_started is not None:
+                        result = self.on_audio_started()
+                        if asyncio.iscoroutine(result):
+                            await result
 
-            # Log the moment the first usable audio arrives.
-            #
-            # This is useful for measuring TTS latency.
-            if first_chunk:
+                chunk_count += 1
+                total_bytes += len(audio_chunk)
+                await self.audio_queue.put(audio_chunk)
+                if chunk_count == 1:
+                    logger.info(
+                        "TTS first PCM chunk queued for transport: %d bytes.",
+                        len(audio_chunk),
+                    )
 
-                logger.info(
-                    "TTS first audio chunk received."
-                )
-
-                first_chunk = False
-
-            # Track statistics for debugging/monitoring.
-            chunk_count += 1
-            total_bytes += len(
-                audio_chunk
+            logger.info(
+                "TTS audio stream queued: %d chunks / %d bytes.",
+                chunk_count,
+                total_bytes,
             )
 
-            # Send the PCM audio chunk to the Speaker pipeline.
-            #
-            # Speaker will eventually read this from audio_queue
-            # and send it to the physical audio device.
-            await self.audio_queue.put(
-                audio_chunk
-            )
+            if self.on_audio_finished is not None:
+                result = self.on_audio_finished()
+                if asyncio.iscoroutine(result):
+                    await result
 
-        # TTS has finished generating the entire sentence.
-        logger.info(
-            "TTS audio stream queued: %d chunks / %d bytes.",
-            chunk_count,
-            total_bytes,
-        )
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            logger.exception("TTS synthesis failed.")
+            if self.on_error is not None:
+                result = self.on_error(str(exc))
+                if asyncio.iscoroutine(result):
+                    await result
+            else:
+                raise
 
     async def interrupt(self) -> None:
 

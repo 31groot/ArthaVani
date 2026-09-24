@@ -70,7 +70,11 @@ class EdgeTTS:
                 "-loglevel",
                 "error",
 
-                # Read input audio from stdin.
+                # Edge TTS yields MP3 audio frames. Explicitly tell
+                # FFmpeg the input format so decoding starts immediately
+                # when reading from a pipe.
+                "-f",
+                "mp3",
                 "-i",
                 "pipe:0",
 
