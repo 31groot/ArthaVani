@@ -391,7 +391,6 @@ async def voice(websocket: WebSocket) -> None:
             websocket,
             user_id=user["id"],
             conversation_id=conversation_id,
-            agent_runner=runner,
         )
     except WebSocketDisconnect:
         return
@@ -401,7 +400,7 @@ async def voice(websocket: WebSocket) -> None:
             await websocket.send_json(
                 {
                     "type": "error",
-                    "message": "Live voice could not start. Check the Deepgram API key and backend logs, then reconnect.",
+                    "message": "Live voice could not start. Please try again; see backend logs for details."
                 }
             )
         except Exception:
