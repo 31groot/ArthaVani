@@ -7,11 +7,11 @@ import uuid
 from contextlib import asynccontextmanager
 from typing import Annotated
 
-from fastapi import Depends, FastAPI, HTTPException, status
+from fastapi import Depends, FastAPI, HTTPException, WebSocket, WebSocketDisconnect, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordRequestForm
 
-from api.groww import connect_once, disconnect, get_status
+from api.groww import connect_once, disconnect, get_status, replace_connection
 from api.schemas import (
     ChatRequest,
     ChatResponse,
@@ -24,6 +24,7 @@ from api.schemas import (
 from api.security import (
     create_access_token,
     get_current_user,
+    get_user_from_access_token,
     hash_password,
     verify_password,
 )
@@ -34,6 +35,7 @@ from finance_agent.runner import FinanceAgentRunner
 from finance_agent.user_context import user_scope
 from finance_agent.providers.groww import build_groww_provider_from_credentials
 from finance_agent.tools import get_portfolio_summary
+from voice.web_pipeline import run_browser_voice_session
 
 
 runner = FinanceAgentRunner()
@@ -208,6 +210,61 @@ async def groww_connect(
     return GrowwConnectionResponse(**result)
 
 
+@app.put(
+    "/api/v1/integrations/groww",
+    response_model=GrowwConnectionResponse,
+)
+async def groww_replace(
+    payload: GrowwConnectRequest,
+    user: CurrentUser,
+) -> GrowwConnectionResponse:
+    """Validate and replace the current user's Groww credentials."""
+    if payload.auth_mode == "api_key_secret":
+        if payload.api_key is None or payload.api_secret is None:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="api_key and api_secret are required for api_key_secret mode.",
+            )
+        credentials = {
+            "api_key": payload.api_key.get_secret_value(),
+            "api_secret": payload.api_secret.get_secret_value(),
+        }
+    else:
+        if payload.totp_token is None or payload.totp_secret is None:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="totp_token and totp_secret are required for totp mode.",
+            )
+        credentials = {
+            "totp_token": payload.totp_token.get_secret_value(),
+            "totp_secret": payload.totp_secret.get_secret_value(),
+        }
+
+    try:
+        groww = build_groww_provider_from_credentials(
+            payload.auth_mode,
+            credentials,
+        )
+        groww.get_holdings()
+    except Exception as exc:
+        logger.warning(
+            "Groww credential replacement validation failed for user=%s: %s",
+            user["id"],
+            type(exc).__name__,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="New Groww credentials could not be validated. Existing credentials were kept.",
+        ) from exc
+
+    result = replace_connection(
+        user_id=user["id"],
+        auth_mode=payload.auth_mode,
+        credentials=credentials,
+    )
+    return GrowwConnectionResponse(**result)
+
+
 @app.delete("/api/v1/integrations/groww", status_code=status.HTTP_204_NO_CONTENT)
 async def groww_disconnect(user: CurrentUser) -> None:
     disconnect(user["id"])
@@ -217,6 +274,70 @@ async def groww_disconnect(user: CurrentUser) -> None:
 async def portfolio_summary(user: CurrentUser) -> dict:
     with user_scope(user["id"]):
         return await get_portfolio_summary.ainvoke({})
+
+
+@app.websocket("/api/v1/voice")
+async def voice(websocket: WebSocket) -> None:
+    """Authenticated full-duplex browser voice transport."""
+    await websocket.accept()
+
+    try:
+        auth_message = await websocket.receive_json()
+    except (WebSocketDisconnect, Exception):
+        await websocket.close(code=1008)
+        return
+
+    if auth_message.get("type") != "auth":
+        await websocket.send_json(
+            {"type": "error", "message": "Authentication is required."}
+        )
+        await websocket.close(code=1008)
+        return
+
+    token = auth_message.get("token")
+    if not isinstance(token, str) or not token:
+        await websocket.send_json(
+            {"type": "error", "message": "Authentication token is missing."}
+        )
+        await websocket.close(code=1008)
+        return
+
+    try:
+        user = get_user_from_access_token(token)
+    except HTTPException as exc:
+        await websocket.send_json(
+            {"type": "error", "message": exc.detail}
+        )
+        await websocket.close(code=1008)
+        return
+
+    conversation_id = auth_message.get("conversation_id", "default")
+    if not isinstance(conversation_id, str) or not conversation_id.strip():
+        conversation_id = "default"
+
+    try:
+        await run_browser_voice_session(
+            websocket,
+            user_id=user["id"],
+            conversation_id=conversation_id,
+        )
+    except WebSocketDisconnect:
+        return
+    except Exception:
+        logger.exception("Browser voice session failed for user=%s", user["id"])
+        try:
+            await websocket.send_json(
+                {
+                    "type": "error",
+                    "message": "Live voice could not start. Check the Deepgram API key and backend logs, then reconnect.",
+                }
+            )
+        except Exception:
+            pass
+        try:
+            await websocket.close(code=1011)
+        except Exception:
+            pass
 
 
 @app.post("/api/v1/chat", response_model=ChatResponse)

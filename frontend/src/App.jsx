@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Navigate, Route, Routes, useNavigate } from "react-router-dom";
 import {
   ArrowRight,
@@ -15,6 +15,7 @@ import {
   MicOff,
   Newspaper,
   ShieldCheck,
+  Settings,
   Sparkles,
   TrendingDown,
   TrendingUp,
@@ -28,12 +29,15 @@ import {
   clearToken,
   connectGroww,
   dashboard,
+  disconnectGroww,
+  updateGroww,
   getToken,
   growwStatus,
   login,
   me,
   register,
   setToken,
+  voiceSocketUrl,
 } from "./api";
 
 function formatINR(value, digits = 2) {
@@ -139,6 +143,17 @@ function App() {
       />
 
       <Route
+        path="/settings/groww"
+        element={
+          !session.user ? (
+            <Navigate to="/auth" replace />
+          ) : (
+            <GrowwManagePage user={session.user} />
+          )
+        }
+      />
+
+      <Route
         path="/"
         element={
           !session.user ? (
@@ -228,7 +243,7 @@ function AuthPage({ onAuthenticated }) {
           <div className="hero-points">
             <HeroPoint icon={<ShieldCheck size={17} />} title="Private by default" text="Your account owns its data and Groww connection." />
             <HeroPoint icon={<Sparkles size={17} />} title="Grounded answers" text="The assistant answers from live tool results." />
-            <HeroPoint icon={<Mic size={17} />} title="Voice-first" text="Talk naturally, then keep the conversation going." />
+            <HeroPoint icon={<Mic size={17} />} title="Voice-first" text="Talk naturally, interrupt responses, and keep the conversation going." />
           </div>
         </div>
 
@@ -442,6 +457,145 @@ function GrowwConnectPage({ user, onConnected }) {
   );
 }
 
+function GrowwManagePage({ user }) {
+  const navigate = useNavigate();
+  const [status, setStatus] = useState(null);
+  const [mode, setMode] = useState("api_key_secret");
+  const [apiKey, setApiKey] = useState("");
+  const [apiSecret, setApiSecret] = useState("");
+  const [totpToken, setTotpToken] = useState("");
+  const [totpSecret, setTotpSecret] = useState("");
+  const [working, setWorking] = useState(false);
+  const [disconnecting, setDisconnecting] = useState(false);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+
+  useEffect(() => {
+    let active = true;
+    growwStatus()
+      .then((value) => {
+        if (active) setStatus(value);
+      })
+      .catch((err) => {
+        if (active) setError(err.message || "Could not load Groww status.");
+      });
+    return () => { active = false; };
+  }, []);
+
+  async function submit(event) {
+    event.preventDefault();
+    setWorking(true);
+    setError("");
+    setSuccess("");
+
+    try {
+      const payload = mode === "api_key_secret"
+        ? { auth_mode: mode, api_key: apiKey, api_secret: apiSecret }
+        : { auth_mode: mode, totp_token: totpToken, totp_secret: totpSecret };
+
+      const updated = await updateGroww(payload);
+      setStatus(updated);
+      setApiKey("");
+      setApiSecret("");
+      setTotpToken("");
+      setTotpSecret("");
+      setSuccess("Groww credentials updated and validated successfully.");
+    } catch (err) {
+      setError(err.message || "Groww credential update failed.");
+    } finally {
+      setWorking(false);
+    }
+  }
+
+  async function handleDisconnect() {
+    setDisconnecting(true);
+    setError("");
+    setSuccess("");
+    try {
+      await disconnectGroww();
+      window.location.assign("/connect");
+    } catch (err) {
+      setError(err.message || "Could not disconnect Groww.");
+    } finally {
+      setDisconnecting(false);
+    }
+  }
+
+  return (
+    <div className="connect-page">
+      <div className="connect-topbar">
+        <Brand compact />
+        <button className="ghost-button" onClick={() => navigate("/")}>Back to dashboard</button>
+      </div>
+
+      <main className="connect-content">
+        <div className="connect-card">
+          <div className="eyebrow centered-eyebrow">BROKER CONNECTION</div>
+          <h1>Manage Groww.</h1>
+          <p className="connect-copy">
+            Rotate expired credentials without signing out. ArthaVani validates the new credentials with Groww before replacing the encrypted connection already stored for {user.email}.
+          </p>
+
+          <div className="status-pill connection-status-line">
+            <span className="status-dot" />
+            {status?.connected ? "Groww connected" : "Groww not connected"}
+            {status?.updated_at ? ` · updated ${new Date(status.updated_at).toLocaleString()}` : ""}
+          </div>
+
+          <form onSubmit={submit} className="stack">
+            <div className="auth-tabs">
+              <button type="button" className={mode === "api_key_secret" ? "active" : ""} onClick={() => setMode("api_key_secret")}>API key + secret</button>
+              <button type="button" className={mode === "totp" ? "active" : ""} onClick={() => setMode("totp")}>TOTP</button>
+            </div>
+
+            {mode === "api_key_secret" ? (
+              <>
+                <label>
+                  New Groww API key
+                  <input value={apiKey} onChange={(e) => setApiKey(e.target.value)} autoComplete="off" required />
+                </label>
+                <label>
+                  New Groww API secret
+                  <input type="password" value={apiSecret} onChange={(e) => setApiSecret(e.target.value)} autoComplete="new-password" required />
+                </label>
+              </>
+            ) : (
+              <>
+                <label>
+                  Groww TOTP token
+                  <input value={totpToken} onChange={(e) => setTotpToken(e.target.value)} autoComplete="off" required />
+                </label>
+                <label>
+                  TOTP secret
+                  <input type="password" value={totpSecret} onChange={(e) => setTotpSecret(e.target.value)} autoComplete="new-password" required />
+                </label>
+              </>
+            )}
+
+            {error && <div className="form-error">{error}</div>}
+            {success && <div className="success-message">{success}</div>}
+
+            <button className="primary-button" disabled={working}>
+              {working ? "Validating and updating…" : "Replace Groww credentials"}
+              <Check size={17} />
+            </button>
+          </form>
+
+          <div className="settings-danger-zone">
+            <div>
+              <strong>Disconnect Groww</strong>
+              <span>Removes the encrypted broker credentials from ArthaVani. Your ArthaVani account remains intact.</span>
+            </div>
+            <button className="ghost-button danger" type="button" disabled={disconnecting} onClick={handleDisconnect}>
+              {disconnecting ? "Disconnecting…" : "Disconnect"}
+            </button>
+          </div>
+        </div>
+      </main>
+    </div>
+  );
+}
+
 function Step({ index, label, active, done }) {
   return (
     <div className={`step ${active ? "active" : ""} ${done ? "done" : ""}`}>
@@ -496,6 +650,9 @@ function DashboardPage({ user, onLogout }) {
             {data?.updated_at ? "Updated just now" : "Syncing"}
           </span>
           <div className="avatar">{userInitial}</div>
+          <button className="icon-button" title="Manage Groww connection" onClick={() => window.location.assign("/settings/groww")}>
+            <Settings size={17} />
+          </button>
           <button className="icon-button" title="Sign out" onClick={onLogout}>
             <LogOut size={17} />
           </button>
@@ -743,18 +900,112 @@ function AssistantCard() {
   const [listening, setListening] = useState(false);
   const [voiceSupported, setVoiceSupported] = useState(false);
   const [voiceError, setVoiceError] = useState("");
-  const recognitionRef = useState({ current: null })[0];
-  const speechBufferRef = useState({ current: "" })[0];
+  const [ttsActive, setTtsActive] = useState(false);
+  const socketRef = useRef(null);
+  const streamRef = useRef(null);
+  const audioContextRef = useRef(null);
+  const captureNodeRef = useRef(null);
+  const playbackNodeRef = useRef(null);
+  const playbackSourcesRef = useRef(new Set());
+  const playbackEndTimeRef = useRef(0);
 
   useEffect(() => {
     setVoiceSupported(
-      Boolean(window.SpeechRecognition || window.webkitSpeechRecognition)
+      Boolean(
+        navigator.mediaDevices?.getUserMedia &&
+          window.AudioContext &&
+          window.AudioWorkletNode
+      )
     );
+
+    return () => {
+      stopListening();
+    };
   }, []);
+
+  function stopPlayback() {
+    for (const source of playbackSourcesRef.current) {
+      try { source.stop(); } catch {}
+      try { source.disconnect(); } catch {}
+    }
+    playbackSourcesRef.current.clear();
+    playbackEndTimeRef.current = 0;
+  }
+
+  function queuePcmAudio(arrayBuffer) {
+    const audioContext = audioContextRef.current;
+    if (!audioContext || audioContext.state === "closed") return;
+
+    let byteLength = arrayBuffer.byteLength;
+    if (byteLength < 2) return;
+    if (byteLength % 2 !== 0) byteLength -= 1;
+
+    const pcm = new Int16Array(arrayBuffer, 0, byteLength / 2);
+    const audioBuffer = audioContext.createBuffer(1, pcm.length, 16000);
+    const channel = audioBuffer.getChannelData(0);
+    for (let i = 0; i < pcm.length; i += 1) {
+      channel[i] = pcm[i] / 32768;
+    }
+
+    const source = audioContext.createBufferSource();
+    source.buffer = audioBuffer;
+    source.connect(audioContext.destination);
+
+    const startAt = Math.max(
+      audioContext.currentTime + 0.01,
+      playbackEndTimeRef.current
+    );
+    source.start(startAt);
+    playbackEndTimeRef.current = startAt + audioBuffer.duration;
+
+    playbackSourcesRef.current.add(source);
+    source.onended = () => {
+      playbackSourcesRef.current.delete(source);
+      try { source.disconnect(); } catch {}
+    };
+  }
+
+  async function stopListening() {
+    const socket = socketRef.current;
+    socketRef.current = null;
+
+    if (socket && socket.readyState === WebSocket.OPEN) {
+      try {
+        socket.send(JSON.stringify({ type: "stop" }));
+      } catch {
+        // Socket may already be closing.
+      }
+      socket.close();
+    }
+
+    stopPlayback();
+    captureNodeRef.current?.disconnect();
+    playbackNodeRef.current?.disconnect();
+    captureNodeRef.current = null;
+    playbackNodeRef.current = null;
+
+    streamRef.current?.getTracks().forEach((track) => track.stop());
+    streamRef.current = null;
+
+    if (audioContextRef.current) {
+      try {
+        await audioContextRef.current.close();
+      } catch {
+        // AudioContext may already be closed by the browser.
+      }
+      audioContextRef.current = null;
+    }
+
+    setListening(false);
+  }
 
   async function send(text) {
     const value = text.trim();
     if (!value || working) return;
+
+    if (listening) {
+      await stopListening();
+    }
 
     setMessages((items) => [...items, { role: "user", content: value }]);
     setInput("");
@@ -767,13 +1018,6 @@ function AssistantCard() {
         ...items,
         { role: "assistant", content: result.message },
       ]);
-
-      if ("speechSynthesis" in window) {
-        window.speechSynthesis.cancel();
-        window.speechSynthesis.speak(
-          new SpeechSynthesisUtterance(result.message)
-        );
-      }
     } catch (err) {
       setMessages((items) => [
         ...items,
@@ -787,76 +1031,209 @@ function AssistantCard() {
     }
   }
 
-  function stopListening() {
-    recognitionRef.current?.stop();
-  }
-
-  function startListening() {
+  async function startListening() {
     if (listening) {
-      stopListening();
+      await stopListening();
       return;
     }
 
-    const Recognition =
-      window.SpeechRecognition || window.webkitSpeechRecognition;
-
-    if (!Recognition) {
-      setVoiceError(
-        "Voice input is not available in this browser. Use Chrome or Edge on localhost or HTTPS."
-      );
+    if (!voiceSupported) {
+      setVoiceError("Live voice needs microphone access and AudioWorklet support. Use Chrome/Edge on localhost or HTTPS.");
       return;
     }
 
-    const recognition = new Recognition();
-    recognition.lang = "en-IN";
-    recognition.interimResults = true;
-    recognition.continuous = false;
-    recognition.maxAlternatives = 1;
+    const token = getToken();
+    if (!token) {
+      setVoiceError("Please sign in before starting live voice.");
+      return;
+    }
 
-    speechBufferRef.current = "";
     setVoiceError("");
-    recognitionRef.current = recognition;
-
-    recognition.onstart = () => setListening(true);
-
-    recognition.onresult = (event) => {
-      let transcript = "";
-      for (let i = 0; i < event.results.length; i += 1) {
-        transcript += event.results[i][0].transcript;
-      }
-
-      speechBufferRef.current = transcript.trim();
-      setInput(speechBufferRef.current);
-    };
-
-    recognition.onerror = (event) => {
-      if (event.error === "not-allowed" || event.error === "service-not-allowed") {
-        setVoiceError(
-          "Microphone access was blocked. Allow microphone access for localhost and try again."
-        );
-      } else if (event.error !== "aborted") {
-        setVoiceError(`Voice input failed: ${event.error}.`);
-      }
-      setListening(false);
-    };
-
-    recognition.onend = () => {
-      setListening(false);
-      recognitionRef.current = null;
-
-      const transcript = speechBufferRef.current.trim();
-      speechBufferRef.current = "";
-
-      if (transcript) {
-        send(transcript);
-      }
-    };
+    setTtsActive(false);
+    let stream;
+    let audioContext;
+    let socket;
+    let captureNode;
+    let playbackNode;
+    let keepAliveGain;
+    let captureReady = false;
 
     try {
-      recognition.start();
-    } catch {
+      // Start audio output from the actual button gesture before awaiting
+      // the microphone permission prompt. This avoids browsers leaving the
+      // AudioContext suspended, which otherwise makes TTS silent.
+      audioContext = new AudioContext();
+      await audioContext.resume();
+
+      stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          channelCount: 1,
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        },
+      });
+
+      await audioContext.audioWorklet.addModule("/pcm-capture-worklet.js");
+
+      socket = new WebSocket(voiceSocketUrl());
+      socket.binaryType = "arraybuffer";
+
+      socket.onopen = () => {
+        socket.send(JSON.stringify({ type: "auth", token, conversation_id: "default" }));
+      };
+
+      socket.onmessage = async (event) => {
+        if (typeof event.data !== "string") {
+          const audio = event.data instanceof ArrayBuffer
+            ? event.data
+            : await event.data.arrayBuffer?.();
+          if (audio) {
+            if (audioContext.state !== "running") {
+              await audioContext.resume().catch(() => {});
+            }
+            queuePcmAudio(audio);
+          }
+          return;
+        }
+
+        let message;
+        try { message = JSON.parse(event.data); } catch { return; }
+
+        if (message.type === "ready") {
+          captureReady = true;
+          setListening(true);
+          setWorking(false);
+          return;
+        }
+        if (message.type === "speech_detected") {
+          setWorking(true);
+          return;
+        }
+        if (message.type === "barge_in") {
+          stopPlayback();
+          setTtsActive(false);
+          setWorking(true);
+          return;
+        }
+        if (message.type === "interim_text") {
+          setInput(message.text || "");
+          return;
+        }
+        if (message.type === "user_text") {
+          const text = message.text?.trim();
+          if (!text) return;
+          setMessages((items) => [...items, { role: "user", content: text }]);
+          setInput("");
+          setWorking(true);
+          return;
+        }
+        if (message.type === "assistant_text") {
+          const text = message.text?.trim();
+          if (!text) return;
+          setMessages((items) => [...items, { role: "assistant", content: text }]);
+          setWorking(false);
+          return;
+        }
+        if (message.type === "tts_started") {
+          setTtsActive(true);
+          return;
+        }
+        if (message.type === "tts_finished") {
+          const delayMs = Math.max(0, (playbackEndTimeRef.current - audioContext.currentTime) * 1000);
+          window.setTimeout(() => {
+            if (audioContextRef.current === audioContext) setTtsActive(false);
+          }, delayMs);
+          return;
+        }
+        if (message.type === "tts_error") {
+          setTtsActive(false);
+          setVoiceError(`TTS failed: ${message.message || "unknown error"}`);
+          return;
+        }
+        if (message.type === "error") {
+          setVoiceError(message.message || "The live voice session failed.");
+          setWorking(false);
+        }
+      };
+
+      socket.onerror = () => {
+        setTtsActive(false);
+        setVoiceError("The live voice connection failed. Check the backend logs for Deepgram or TTS startup errors.");
+      };
+      socket.onclose = () => {
+        setTtsActive(false);
+        if (socketRef.current === socket) {
+          socketRef.current = null;
+          setListening(false);
+        }
+      };
+
+      await new Promise((resolve, reject) => {
+        const timer = setTimeout(() => reject(new Error("Timed out opening the voice WebSocket.")), 10000);
+        if (socket.readyState === WebSocket.OPEN) {
+          clearTimeout(timer);
+          resolve();
+          return;
+        }
+        socket.addEventListener("open", () => { clearTimeout(timer); resolve(); }, { once: true });
+        socket.addEventListener("error", () => { clearTimeout(timer); reject(new Error("Could not open the voice WebSocket.")); }, { once: true });
+      });
+
+      await new Promise((resolve, reject) => {
+        const timer = setTimeout(() => reject(new Error("Voice backend did not become ready within 15 seconds.")), 15000);
+        const handler = (event) => {
+          if (typeof event.data !== "string") return;
+          let message;
+          try { message = JSON.parse(event.data); } catch { return; }
+          if (message.type === "ready") {
+            clearTimeout(timer);
+            socket.removeEventListener("message", handler);
+            resolve();
+          } else if (message.type === "error") {
+            clearTimeout(timer);
+            socket.removeEventListener("message", handler);
+            reject(new Error(message.message || "Voice backend failed to start."));
+          }
+        };
+        socket.addEventListener("message", handler);
+      });
+
+      const source = audioContext.createMediaStreamSource(stream);
+      captureNode = new AudioWorkletNode(audioContext, "pcm16-capture", {
+        processorOptions: { targetSampleRate: 16000 },
+      });
+      keepAliveGain = audioContext.createGain();
+      keepAliveGain.gain.value = 0;
+
+      source.connect(captureNode);
+      captureNode.connect(keepAliveGain);
+      keepAliveGain.connect(audioContext.destination);
+
+      captureNode.port.onmessage = (event) => {
+        if (captureReady && socket.readyState === WebSocket.OPEN) {
+          socket.send(event.data);
+        }
+      };
+
+      socketRef.current = socket;
+      streamRef.current = stream;
+      audioContextRef.current = audioContext;
+      captureNodeRef.current = captureNode;
+      playbackNodeRef.current = null;
+    } catch (err) {
+      try { socket?.close(); } catch {}
+      stopPlayback();
+      captureNode?.disconnect();
+      keepAliveGain?.disconnect();
+      stream?.getTracks().forEach((track) => track.stop());
+      try { await audioContext?.close(); } catch {}
       setListening(false);
-      setVoiceError("Could not start the microphone. Try again.");
+      setVoiceError(
+        err?.name === "NotAllowedError"
+          ? "Microphone access was blocked. Allow microphone access and try again."
+          : err?.message || "Could not start live voice."
+      );
     }
   }
 
@@ -872,7 +1249,7 @@ function AssistantCard() {
         </div>
         <div className="assistant-live">
           <span />
-          Ready
+          {listening ? "Live" : "Ready"}
         </div>
       </div>
 
@@ -881,13 +1258,15 @@ function AssistantCard() {
           <Mic size={15} />
         </div>
         <div>
-          <strong>{listening ? "Listening…" : "Tap Speak to talk"}</strong>
+          <strong>{listening ? (ttsActive ? "ArthaVani is speaking" : "Live voice is on") : "Tap Speak to talk"}</strong>
           <span>
             {listening
-              ? "Speak naturally. I’ll send your question when you finish."
+              ? ttsActive
+                ? "Speak anytime to interrupt. Your words will appear below as they are recognized."
+                : "Speak naturally. Your words appear in the input bar as ArthaVani listens."
               : voiceSupported
-                ? "Your browser microphone will turn speech into a finance question."
-                : "Voice input needs Chrome or Edge on localhost or HTTPS."}
+                ? "Streams microphone audio through Deepgram, Silero VAD and Edge-TTS."
+                : "Live voice needs Chrome or Edge on localhost or HTTPS."}
           </span>
         </div>
       </div>
@@ -910,13 +1289,14 @@ function AssistantCard() {
         )}
       </div>
 
+      {voiceError && <div className="voice-error">{voiceError}</div>}
+
       <div className="assistant-input">
         <button
           className={`mic-button ${listening ? "listening" : ""}`}
-          title={listening ? "Stop listening" : "Speak to ArthaVani"}
+          title={listening ? "Stop live voice" : "Speak to ArthaVani"}
           onClick={startListening}
-          disabled={working}
-          aria-label={listening ? "Stop listening" : "Speak to ArthaVani"}
+          aria-label={listening ? "Stop live voice" : "Speak to ArthaVani"}
         >
           {listening ? <MicOff size={17} /> : <Mic size={17} />}
         </button>
@@ -927,37 +1307,18 @@ function AssistantCard() {
           onKeyDown={(e) => {
             if (e.key === "Enter") send(input);
           }}
-          placeholder="Type or use Speak…"
-          disabled={working || listening}
+          placeholder={listening ? "Listening…" : "Type or use Speak…"}
+          disabled={working}
           aria-label="Ask ArthaVani"
         />
 
         <button
           className="send-button"
           onClick={() => send(input)}
-          disabled={!input.trim() || working || listening}
+          disabled={!input.trim() || working}
           aria-label="Send message"
         >
-          <ArrowRight size={16} />
-        </button>
-      </div>
-
-      {voiceError && (
-        <div className="voice-error">
-          <MicOff size={14} />
-          <span>{voiceError}</span>
-        </div>
-      )}
-
-      <div className="assistant-hints">
-        <button onClick={() => send("What is my portfolio worth?")}>
-          Portfolio value
-        </button>
-        <button onClick={() => send("What is my largest holding?")}>
-          Largest holding
-        </button>
-        <button onClick={() => send("What is happening in the market?")}>
-          Market
+          <ArrowRight size={17} />
         </button>
       </div>
     </div>

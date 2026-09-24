@@ -308,6 +308,51 @@ input::placeholder {
   color: var(--muted-2);
 }
 
+.success-message {
+  border: 1px solid #cfe4d6;
+  background: #f4fbf6;
+  color: #25613b;
+  border-radius: 7px;
+  padding: 10px 11px;
+  font-size: 11px;
+}
+
+.settings-danger-zone {
+  margin-top: 28px;
+  padding-top: 22px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.settings-danger-zone strong,
+.settings-danger-zone span {
+  display: block;
+}
+
+.settings-danger-zone strong {
+  font-size: 11px;
+}
+
+.settings-danger-zone span {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 9px;
+  line-height: 1.45;
+}
+
+.ghost-button.danger {
+  color: var(--negative);
+  border-color: #e5cccc;
+}
+
+.connection-status-line {
+  margin: 0 auto 22px;
+  width: fit-content;
+}
+
 .form-error,
 .dashboard-error,
 .voice-error {

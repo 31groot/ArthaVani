@@ -91,6 +91,19 @@ export function connectGroww(payload) {
   });
 }
 
+export function updateGroww(payload) {
+  return request("/api/v1/integrations/groww", {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function disconnectGroww() {
+  return request("/api/v1/integrations/groww", {
+    method: "DELETE",
+  });
+}
+
 export function dashboard() {
   return request("/api/v1/dashboard");
 }
@@ -103,4 +116,30 @@ export function chat(message, conversationId = "default") {
       conversation_id: conversationId,
     }),
   });
+}
+
+export function voiceSocketUrl() {
+  const explicit = import.meta.env.VITE_VOICE_WS_URL;
+  if (explicit) {
+    return explicit.replace(/\/$/, "") + "/api/v1/voice";
+  }
+
+  // During Vite development, keep the socket same-origin so the Vite
+  // /api proxy handles the WebSocket upgrade. This avoids localhost/127.0.0.1
+  // mismatches and works consistently with the REST API.
+  if (import.meta.env.DEV) {
+    const url = new URL(window.location.origin);
+    url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
+    url.pathname = "/api/v1/voice";
+    return url.toString();
+  }
+
+  const configuredBase = import.meta.env.VITE_API_BASE_URL || window.location.origin;
+  const url = new URL(configuredBase, window.location.origin);
+  url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
+  const basePath = url.pathname.replace(/\/$/, "");
+  url.pathname = `${basePath}/api/v1/voice`;
+  url.search = "";
+  url.hash = "";
+  return url.toString();
 }
