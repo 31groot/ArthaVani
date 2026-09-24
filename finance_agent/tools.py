@@ -445,7 +445,7 @@ def _portfolio_snapshot() -> dict[str, Any]:
         "allocation": allocation,
         "currency": "INR",
         "market_data_available": market_data_available,
-        "market_data_realtime": price_freshness == "real_time",
+        "market_data_realtime": portfolio_price_freshness == "real_time",
         "valuation_basis": (
             "live_market_value"
             if portfolio_price_source == "groww_live" and market_data_available
