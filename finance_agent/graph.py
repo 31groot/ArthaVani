@@ -1,5 +1,5 @@
-
 import asyncio
+import random
 from collections.abc import Sequence
 
 from langchain_core.language_models.chat_models import BaseChatModel
@@ -11,7 +11,14 @@ from langgraph.graph.state import CompiledStateGraph
 from langgraph.prebuilt import ToolNode, tools_condition
 
 from config.logger import logger
-from finance_agent.errors import LLMProviderError
+from finance_agent.errors import LLMProviderError, LLMRateLimitError
+
+# Retry policy for rate-limit-shaped LLM provider failures only (e.g. Groq's
+# tokens-per-minute cap). Other failures (auth, network, bad model name)
+# fail immediately -- retrying those just delays a response that will
+# never succeed.
+RATE_LIMIT_MAX_ATTEMPTS = 3
+RATE_LIMIT_BASE_DELAY_SECONDS = 1.5
 
 FINANCE_AGENT_SYSTEM_PROMPT = """
 You are ArthaVani, a real-time AI voice assistant for personal finance and
@@ -82,6 +89,26 @@ Rules:
 - Never claim real-time data unless the tool explicitly reports it as real-time.
 - If a requested fact is unavailable, say so plainly rather than guessing.
 """
+def _is_rate_limit_error(exc: Exception) -> bool:
+    """Best-effort detection of a rate/usage-limit rejection.
+
+    Providers surface this differently (Groq has returned both 429 and,
+    for this specific "request too large for the TPM budget" case, 413),
+    so this checks the HTTP status code where available and falls back to
+    matching on the error body, rather than depending on one exception
+    class from one provider's SDK.
+    """
+    status_code = getattr(exc, "status_code", None)
+    if status_code not in (429, 413):
+        return False
+
+    message = str(exc).lower()
+    return any(
+        marker in message
+        for marker in ("rate_limit", "rate limit", "tokens per minute", "tpm")
+    )
+
+
 def build_finance_agent_graph(
     model: BaseChatModel,
     tools: Sequence[BaseTool],
@@ -108,20 +135,55 @@ def build_finance_agent_graph(
         # it in Postgres on every single turn.
         messages = [SystemMessage(content=FINANCE_AGENT_SYSTEM_PROMPT)] + state["messages"]
 
-        try:
-            response = await model_with_tools.ainvoke(messages)
-        except asyncio.CancelledError:
-            raise
-        except Exception as exc:
-            provider_name = model.__class__.__name__
-            logger.exception("%s LLM request failed.", provider_name)
-            raise LLMProviderError(
-                f"{provider_name} LLM request failed. "
-                "Check the model configuration, network connection, "
-                "and provider availability."
-            ) from exc
+        provider_name = model.__class__.__name__
+        last_rate_limit_exc: Exception | None = None
 
-        return {"messages": [response]}
+        for attempt in range(1, RATE_LIMIT_MAX_ATTEMPTS + 1):
+            try:
+                response = await model_with_tools.ainvoke(messages)
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:
+                if _is_rate_limit_error(exc) and attempt < RATE_LIMIT_MAX_ATTEMPTS:
+                    last_rate_limit_exc = exc
+                    # Exponential backoff with jitter, so a burst of
+                    # concurrent sessions hitting the same limit don't all
+                    # retry in lockstep.
+                    delay = RATE_LIMIT_BASE_DELAY_SECONDS * (2 ** (attempt - 1))
+                    delay += random.uniform(0, delay * 0.25)
+                    logger.warning(
+                        "%s rate-limited (attempt %d/%d); retrying in %.1fs.",
+                        provider_name,
+                        attempt,
+                        RATE_LIMIT_MAX_ATTEMPTS,
+                        delay,
+                    )
+                    await asyncio.sleep(delay)
+                    continue
+
+                logger.exception("%s LLM request failed.", provider_name)
+
+                if _is_rate_limit_error(exc):
+                    raise LLMRateLimitError(
+                        f"{provider_name} is currently rate-limited "
+                        "(request exceeded the provider's token/usage "
+                        "limit) and retries were exhausted."
+                    ) from exc
+
+                raise LLMProviderError(
+                    f"{provider_name} LLM request failed. "
+                    "Check the model configuration, network connection, "
+                    "and provider availability."
+                ) from exc
+            else:
+                return {"messages": [response]}
+
+        # Unreachable in practice: the loop above always either returns or
+        # raises. Kept as a defensive guard in case RATE_LIMIT_MAX_ATTEMPTS
+        # is ever set to 0.
+        raise LLMRateLimitError(
+            f"{provider_name} is currently rate-limited."
+        ) from last_rate_limit_exc
 
     builder = StateGraph(MessagesState)
     builder.add_node("call_model", call_model)

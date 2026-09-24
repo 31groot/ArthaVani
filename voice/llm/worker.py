@@ -4,7 +4,7 @@ from collections.abc import Awaitable, Callable
 from config.logger import logger
 
 from finance_agent.conversation import ConversationIdentity
-from finance_agent.errors import LLMProviderError
+from finance_agent.errors import LLMProviderError, LLMRateLimitError
 from finance_agent.runner import FinanceAgentRunner
 from finance_agent.user_context import user_scope
 from voice.stt.events import TranscriptEvent
@@ -180,6 +180,26 @@ class LLMWorker:
 
         except asyncio.CancelledError:
             raise
+
+        except LLMRateLimitError as exc:
+            # Distinct from the generic provider-failure branch below: this
+            # is a known, transient cause (the provider's usage/rate limit),
+            # already retried with backoff in the graph, so tell the user
+            # something accurate instead of a generic "trouble reaching" line.
+            logger.error("LLM rate limit exhausted: %s", exc)
+
+            try:
+                await self.splitter.feed(
+                    "The finance assistant is a bit busy right now. "
+                    "Please try again in a moment."
+                )
+                await self.splitter.flush()
+            except Exception:
+                logger.exception(
+                    "Failed to speak the LLM rate-limit error message."
+                )
+
+            return
 
         except LLMProviderError as exc:
             logger.error("LLM provider failure: %s", exc)
