@@ -24,6 +24,7 @@ from voice.vad.detector import SpeechDetector
 from voice.vad.events import ConversationEvent, SpeechState
 from voice.vad.silero import SileroVAD
 from voice.vad.worker import VADWorker
+from finance_agent.runner import FinanceAgentRunner
 
 
 class BrowserVoicePipeline:
@@ -34,6 +35,7 @@ class BrowserVoicePipeline:
         *,
         user_id: str,
         conversation_id: str,
+        agent_runner: FinanceAgentRunner | None = None,
     ) -> None:
         self.conversation_identity = ConversationIdentity(
             user_id=user_id,
@@ -93,6 +95,7 @@ class BrowserVoicePipeline:
             conversation_identity=self.conversation_identity,
             on_user_text=self._on_user_text,
             on_assistant_text=self._on_assistant_text,
+            agent_runner=agent_runner,
         )
 
         self._audio_fanout_task: asyncio.Task | None = None
@@ -508,6 +511,7 @@ async def run_browser_voice_session(
     *,
     user_id: str,
     conversation_id: str,
+    agent_runner: FinanceAgentRunner | None = None,
 ) -> None:
     """Run a full duplex WebSocket voice session."""
 
@@ -519,6 +523,7 @@ async def run_browser_voice_session(
         pipeline = BrowserVoicePipeline(
             user_id=user_id,
             conversation_id=conversation_id,
+            agent_runner=agent_runner,
         )
         await pipeline.start()
 
