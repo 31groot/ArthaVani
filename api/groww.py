@@ -39,10 +39,19 @@ def connect_once(
             status_code=status.HTTP_409_CONFLICT,
             detail=(
                 "Groww is already connected for this user. "
-                "Disconnect it before replacing the connection."
+                "Use the replace/update connection flow instead."
             ),
         )
 
+    return replace_connection(user_id, auth_mode, credentials)
+
+
+def replace_connection(
+    user_id: str,
+    auth_mode: str,
+    credentials: dict[str, str],
+) -> dict[str, Any]:
+    """Atomically replace the encrypted Groww credentials after validation."""
     encrypted = encrypt_credentials(credentials)
     save_groww_connection(user_id, auth_mode, encrypted)
     return get_status(user_id)

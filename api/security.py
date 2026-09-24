@@ -71,7 +71,8 @@ def _decode_user_id(token: str) -> str:
     return user_id
 
 
-async def get_current_user(token: str = Depends(oauth2_scheme)) -> dict[str, Any]:
+def get_user_from_access_token(token: str) -> dict[str, Any]:
+    """Resolve a bearer token for non-HTTP transports such as WebSocket."""
     user_id = _decode_user_id(token)
     user = get_user_by_id(user_id)
     if user is None:
@@ -81,3 +82,7 @@ async def get_current_user(token: str = Depends(oauth2_scheme)) -> dict[str, Any
             headers={"WWW-Authenticate": "Bearer"},
         )
     return user
+
+
+async def get_current_user(token: str = Depends(oauth2_scheme)) -> dict[str, Any]:
+    return get_user_from_access_token(token)
