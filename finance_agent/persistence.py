@@ -2,10 +2,10 @@
 from __future__ import annotations
 
 from contextlib import contextmanager
-from datetime import datetime
 from typing import Any, Iterator
 
 import psycopg
+from psycopg_pool import ConnectionPool
 
 from config.settings import settings
 
@@ -39,9 +39,44 @@ def _require_database_url() -> str:
     return settings.DATABASE_URL
 
 
+_pool: ConnectionPool | None = None
+
+
+def _get_pool() -> ConnectionPool:
+    """Lazily create the shared connection pool.
+
+    A module-level pool means every call below reuses a small set of
+    already-open connections instead of opening (and TLS-handshaking) a
+    brand new `psycopg.connect()` on every single query, which is what the
+    previous implementation did. `open=False` + explicit `.open()` avoids
+    psycopg_pool's deprecation warning about opening a pool implicitly in
+    `__init__`, and lets us defer connecting until it's actually needed
+    (e.g. so importing this module doesn't require DATABASE_URL to exist).
+    """
+    global _pool
+    if _pool is None:
+        pool = ConnectionPool(
+            conninfo=_require_database_url(),
+            min_size=1,
+            max_size=10,
+            open=False,
+        )
+        pool.open()
+        _pool = pool
+    return _pool
+
+
+def close_pool() -> None:
+    """Close the shared pool. Intended for use on application shutdown."""
+    global _pool
+    if _pool is not None:
+        _pool.close()
+        _pool = None
+
+
 @contextmanager
 def db_connection() -> Iterator[psycopg.Connection]:
-    with psycopg.connect(_require_database_url()) as conn:
+    with _get_pool().connection() as conn:
         yield conn
 
 
