@@ -13,7 +13,7 @@ class Settings(BaseSettings):
     GROQ_API_KEY: str = ""
     GROQ_MODEL: str = ""
 
-    DEEPGRAM_API_KEY: str
+    DEEPGRAM_API_KEY: str = ""
     DEEPGRAM_MODEL: str = "nova-3"
 
     DISABLE_AEC: bool = False
