@@ -1,9 +1,0 @@
-Add these fields to `config/settings.py` inside `Settings`:
-
-    API_JWT_SECRET_KEY: str = ""
-    API_JWT_ALGORITHM: str = "HS256"
-    API_JWT_EXPIRE_MINUTES: int = 60
-    API_CORS_ORIGINS: list[str] = ["http://localhost:3000", "http://localhost:5173"]
-    GROWW_CREDENTIALS_ENCRYPTION_KEY: str = ""
-
-Then keep the existing fields unchanged.
