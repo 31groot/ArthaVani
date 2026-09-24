@@ -13,6 +13,7 @@ class STTWorker:
         deepgram: DeepgramClient,
         audio_queue: asyncio.Queue[bytes],
         transcript_queue: asyncio.Queue[TranscriptEvent],
+        on_transcript=None,
     ):
 
         # DeepgramClient is responsible for the actual Deepgram
@@ -31,11 +32,18 @@ class STTWorker:
  
         self.transcript_queue = transcript_queue
 
+        # Optional callback invoked for every transcript event.
+        # Browser voice uses this to render interim words without
+        # changing the final transcript flow consumed by the LLM.
+        self.on_transcript = on_transcript
+
         # Main worker task.
         #
         # This task runs run(), which starts both the send and receive
         # loops.
         self._task: asyncio.Task | None = None
+        self._ready_event = asyncio.Event()
+        self._startup_error: Exception | None = None
 
     async def _send_audio_loop(self) -> None:
 
@@ -82,6 +90,11 @@ class STTWorker:
             # Wait for the next TranscriptEvent from DeepgramClient.
             event = await self.deepgram.receive()
 
+            if self.on_transcript is not None:
+                result = self.on_transcript(event)
+                if asyncio.iscoroutine(result):
+                    await result
+
             # Put the event into the queue consumed by LLMWorker.
             #
             # This keeps STT independent from the LLM layer.
@@ -96,7 +109,15 @@ class STTWorker:
         )
 
         # Connect to Deepgram before starting either loop.
-        await self.deepgram.connect()
+        try:
+            await self.deepgram.connect()
+            self._startup_error = None
+            self._ready_event.set()
+        except Exception as exc:
+            self._startup_error = exc
+            self._ready_event.set()
+            logger.exception("Deepgram connection failed during STT startup.")
+            raise
 
         # Start the send and receive loops concurrently.
         #
@@ -168,6 +189,14 @@ class STTWorker:
             # being left open.
             await self.deepgram.close()
 
+    async def wait_until_ready(self, timeout: float = 15.0) -> None:
+        """Wait until the Deepgram connection is established or failed."""
+        await asyncio.wait_for(self._ready_event.wait(), timeout=timeout)
+        if self._startup_error is not None:
+            raise RuntimeError("Deepgram STT could not start.") from self._startup_error
+        if self.deepgram.connection is None:
+            raise RuntimeError("Deepgram STT did not establish a connection.")
+
     def start(self) -> None:
 
         # Prevent accidentally starting two copies of the same worker.
@@ -176,6 +205,9 @@ class STTWorker:
             raise RuntimeError(
                 "STT Worker already started."
             )
+
+        self._ready_event.clear()
+        self._startup_error = None
 
         # Start the main worker as a background asyncio task.
         #
@@ -209,6 +241,9 @@ class STTWorker:
 
             # Cancellation during shutdown is expected.
             pass
+
+        self._ready_event.clear()
+        self._startup_error = None
 
         # Clear the task reference so the worker can be started again.
         self._task = None

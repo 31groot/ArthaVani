@@ -1,10 +1,12 @@
 import asyncio
+from collections.abc import Awaitable, Callable
 
 from config.logger import logger
 
 from finance_agent.conversation import ConversationIdentity
 from finance_agent.errors import LLMProviderError
 from finance_agent.runner import FinanceAgentRunner
+from finance_agent.user_context import user_scope
 from voice.stt.events import TranscriptEvent
 from voice.text.text_splitter import SentenceSplitter
 
@@ -16,6 +18,8 @@ class LLMWorker:
         splitter: SentenceSplitter,
         transcript_queue: asyncio.Queue[TranscriptEvent],
         conversation_identity: ConversationIdentity,
+        on_user_text: Callable[[str], Awaitable[None] | None] | None = None,
+        on_assistant_text: Callable[[str], Awaitable[None] | None] | None = None,
     ):
         # Identifies this voice session's conversation to the
         # AsyncPostgresSaver checkpointer, so every turn is appended to
@@ -25,6 +29,11 @@ class LLMWorker:
         # CONVERSATION_THREAD_ID is used.
 
         self.conversation_identity = conversation_identity
+
+        # Optional transport callbacks used by the browser voice session.
+        # The desktop pipeline leaves these as None.
+        self.on_user_text = on_user_text
+        self.on_assistant_text = on_assistant_text
 
         # Converts streamed LLM text into sentence-sized pieces
         # that can be sent to the TTS pipeline incrementally.
@@ -78,6 +87,11 @@ class LLMWorker:
                     "User: %s",
                     text,
                 )
+
+                if self.on_user_text is not None:
+                    result = self.on_user_text(text)
+                    if asyncio.iscoroutine(result):
+                        await result
 
                 # Cancel/replace old generation if needed.
                 if (
@@ -138,23 +152,25 @@ class LLMWorker:
             # Only the new user message is sent -- AsyncPostgresSaver
             # loads the rest of this thread_id's conversation from
             # Postgres automatically inside the graph.
-            async for text_chunk in self.agent_runner.astream_text(
-                user_text,
-                thread_id=self.conversation_identity.thread_id,
-            ):
+            # Finance tools resolve the authenticated user through a ContextVar.
+            # HTTP chat already sets this scope; browser voice must do it too.
+            with user_scope(self.conversation_identity.user_id):
+                async for text_chunk in self.agent_runner.astream_text(
+                    user_text,
+                    thread_id=self.conversation_identity.thread_id,
+                ):
 
-                # Keep the chunk so the full response can be rebuilt later.
-                assistant_response.append(
-                    text_chunk
-                )
+                    # Keep the chunk so the full response can be rebuilt later.
+                    assistant_response.append(
+                        text_chunk
+                    )
 
-                # Immediately send the chunk into the sentence splitter.
-                #
-                # This allows downstream TTS to begin speaking while
-                # the LLM is still generating the remaining response.
-                await self.splitter.feed(
-                    text_chunk
-                )
+                    # Immediately send the chunk into the sentence splitter.
+                    # This allows downstream TTS to begin speaking while
+                    # the LLM is still generating the remaining response.
+                    await self.splitter.feed(
+                        text_chunk
+                    )
 
             # The LLM stream has ended.
             #
@@ -206,6 +222,11 @@ class LLMWorker:
             "LLM generation finished: %d chars.",
             len(assistant_text),
         )
+
+        if self.on_assistant_text is not None:
+            result = self.on_assistant_text(assistant_text)
+            if asyncio.iscoroutine(result):
+                await result
 
 
     async def start(self) -> None:
