@@ -49,3 +49,10 @@ growwapi>=1.5.0
 yfinance
 edge-tts
 webrtc-audio-processing>=0.1,<1
+fastapi
+uvicorn==0.54.0
+PyJWT
+pwdlib[argon2]
+cryptography
+email-validator
+python-multipart
