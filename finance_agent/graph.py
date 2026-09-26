@@ -13,12 +13,8 @@ from langgraph.prebuilt import ToolNode, tools_condition
 from config.logger import logger
 from finance_agent.errors import LLMProviderError, LLMRateLimitError
 
-# Retry policy for rate-limit-shaped LLM provider failures only (e.g. Groq's
-# tokens-per-minute cap). Other failures (auth, network, bad model name)
-# fail immediately -- retrying those just delays a response that will
-# never succeed.
-RATE_LIMIT_MAX_ATTEMPTS = 3
-RATE_LIMIT_BASE_DELAY_SECONDS = 1.5
+from config.constants import RATE_LIMIT_MAX_ATTEMPTS, RATE_LIMIT_BASE_DELAY_SECONDS, MAX_HISTORY_TURNS
+
 
 FINANCE_AGENT_SYSTEM_PROMPT = """
 You are ArthaVani, a real-time AI voice assistant for personal finance and
@@ -92,9 +88,7 @@ Rules:
 def _is_rate_limit_error(exc: Exception) -> bool:
     """Best-effort detection of a rate/usage-limit rejection.
 
-    Providers surface this differently (Groq has returned both 429 and,
-    for this specific "request too large for the TPM budget" case, 413),
-    so this checks the HTTP status code where available and falls back to
+    Checks the HTTP status code where available and falls back to
     matching on the error body, rather than depending on one exception
     class from one provider's SDK.
     """
@@ -106,6 +100,197 @@ def _is_rate_limit_error(exc: Exception) -> bool:
     return any(
         marker in message
         for marker in ("rate_limit", "rate limit", "tokens per minute", "tpm")
+    )
+
+
+
+# Keep the provider request comfortably below small/free-tier TPM caps.
+# The exact token count varies by tokenizer, so we reduce the two biggest
+# sources of prompt growth: unneeded tool schemas and old tool-call history.
+MAX_HISTORY_TURNS = 3
+
+TOOL_GROUPS = {
+    "portfolio": {
+        "get_portfolio_summary",
+        "get_portfolio_risk",
+    },
+    "company": {
+        "yahoo_get_quote",
+        "yahoo_get_fundamentals",
+        "yahoo_get_history",
+        "yahoo_get_technical_analysis",
+        "yahoo_get_news",
+        "yahoo_get_corporate_actions",
+        "yahoo_get_earnings_calendar",
+    },
+    "mutual_fund": {
+        "amfi_get_latest_nav",
+        "amfi_get_nav_history",
+    },
+    "currency": {
+        "convert_currency",
+    },
+    "market_status": {
+        "get_nse_market_status",
+    },
+    "watchlist": {
+        "watchlist_add",
+        "watchlist_remove",
+        "watchlist_list",
+        "watchlist_check",
+    },
+}
+
+def _select_tools_for_turn(user_text: str, tools: Sequence[BaseTool]) -> list[BaseTool]:
+    """Return only the tool schemas relevant to the current voice turn.
+
+    Sending every finance tool schema on every request is expensive in tokens.
+    A normal conversational question such as "How can you help me?" needs no
+    finance tool definitions at all.
+    """
+    text = user_text.lower()
+    selected_names: set[str] = set()
+
+    portfolio_terms = (
+        "portfolio",
+        "holding",
+        "holdings",
+        "my investment",
+        "my investments",
+        "p&l",
+        "pnl",
+        "my profit",
+        "my loss",
+        "allocation of my",
+        "concentration",
+        "diversification",
+        "portfolio risk",
+    )
+    if any(term in text for term in portfolio_terms):
+        selected_names.update(TOOL_GROUPS["portfolio"])
+
+    company_terms = (
+        "stock",
+        "share",
+        "shares",
+        "ticker",
+        "price",
+        "quote",
+        "company",
+        "fundamental",
+        "valuation",
+        "revenue",
+        "earnings",
+        "news",
+        "technical",
+        "rsi",
+        "sma",
+        "moving average",
+        "historical",
+        "history",
+        "dividend",
+        "dividends",
+        "split",
+        "splits",
+    )
+    if any(term in text for term in company_terms):
+        selected_names.update(TOOL_GROUPS["company"])
+
+    mutual_fund_terms = (
+        "mutual fund",
+        "mutual funds",
+        "nav",
+        "sip",
+        "fund scheme",
+    )
+    if any(term in text for term in mutual_fund_terms):
+        selected_names.update(TOOL_GROUPS["mutual_fund"])
+
+    currency_terms = (
+        "currency",
+        "exchange rate",
+        "fx",
+        "convert",
+        "usd",
+        "inr",
+        "eur",
+        "gbp",
+        "dollar",
+        "rupee",
+        "euro",
+        "pound",
+    )
+    if any(term in text for term in currency_terms):
+        selected_names.update(TOOL_GROUPS["currency"])
+
+    market_status_terms = (
+        "nse open",
+        "nse closed",
+        "market open",
+        "market closed",
+        "market status",
+        "is the market open",
+    )
+    if any(term in text for term in market_status_terms):
+        selected_names.update(TOOL_GROUPS["market_status"])
+
+    watchlist_terms = (
+        "watchlist",
+        "price alert",
+        "price alerts",
+        "target price",
+        "alert",
+    )
+    if any(term in text for term in watchlist_terms):
+        selected_names.update(TOOL_GROUPS["watchlist"])
+
+    return [tool for tool in tools if tool.name in selected_names]
+
+
+def _recent_model_messages(
+    state_messages: Sequence,
+    *,
+    max_turns: int = MAX_HISTORY_TURNS,
+) -> list:
+    """Keep current-turn tool context plus a small text-only conversation window.
+
+    Old ToolMessages can be very large (for example historical price data).
+    They are not useful enough to justify replaying them on every new turn.
+    The current turn remains intact so the model can answer from fresh tool
+    results.
+    """
+    human_indices = [
+        index
+        for index, message in enumerate(state_messages)
+        if getattr(message, "type", None) == "human"
+    ]
+
+    if not human_indices:
+        return list(state_messages)[-8:]
+
+    current_start = human_indices[-1]
+    prior_start = human_indices[-max_turns] if len(human_indices) >= max_turns else 0
+
+    compact_prior = []
+    for message in state_messages[prior_start:current_start]:
+        message_type = getattr(message, "type", None)
+        if message_type not in {"human", "ai"}:
+            continue
+        if getattr(message, "tool_calls", None):
+            continue
+        compact_prior.append(message)
+
+    return compact_prior + list(state_messages[current_start:])
+
+
+def _is_request_too_large(exc: Exception) -> bool:
+    """True for deterministic oversized-request failures that should not retry."""
+    status_code = getattr(exc, "status_code", None)
+    message = str(exc).lower()
+    return (
+        status_code == 413
+        or "request too large" in message
+        or "requested" in message and "tokens per minute" in message
     )
 
 
@@ -124,27 +309,49 @@ def build_finance_agent_graph(
     When `checkpointer` is None, the graph is stateless: each `ainvoke`/
     `astream` call only sees the messages explicitly passed to it.
     """
-    model_with_tools = model.bind_tools(list(tools))
-
     async def call_model(state: MessagesState) -> dict:
         # The system prompt is prepended here, at inference time, rather
         # than being passed in by the caller and persisted into checkpoint
         # state. With a checkpointer attached, `state["messages"]` already
-        # contains the full prior conversation for this thread_id, so
-        # re-adding a SystemMessage on every turn would otherwise duplicate
-        # it in Postgres on every single turn.
-        messages = [SystemMessage(content=FINANCE_AGENT_SYSTEM_PROMPT)] + state["messages"]
+        # contains prior conversation for this thread_id.
+        user_text = ""
+        for message in reversed(state["messages"]):
+            if getattr(message, "type", None) == "human":
+                user_text = str(getattr(message, "content", "") or "")
+                break
+
+        selected_tools = _select_tools_for_turn(user_text, tools)
+        recent_messages = _recent_model_messages(state["messages"])
+        messages = [SystemMessage(content=FINANCE_AGENT_SYSTEM_PROMPT)] + recent_messages
+
+        # Bind only relevant tool schemas for this turn. This is the biggest
+        # token saving for generic voice questions and keeps the request under
+        # small TPM limits instead of sending all finance schemas every time.
+        model_for_turn = model.bind_tools(selected_tools) if selected_tools else model
+
+        logger.debug(
+            "LLM context: %d messages, %d selected tools (%s).",
+            len(messages),
+            len(selected_tools),
+            ", ".join(tool.name for tool in selected_tools) or "none",
+        )
 
         provider_name = model.__class__.__name__
         last_rate_limit_exc: Exception | None = None
 
         for attempt in range(1, RATE_LIMIT_MAX_ATTEMPTS + 1):
             try:
-                response = await model_with_tools.ainvoke(messages)
+                response = await model_for_turn.ainvoke(messages)
             except asyncio.CancelledError:
                 raise
             except Exception as exc:
-                if _is_rate_limit_error(exc) and attempt < RATE_LIMIT_MAX_ATTEMPTS:
+                # A 413/request-too-large response is deterministic for the
+                # current payload. Retrying the exact same request cannot fix it.
+                if (
+                    _is_rate_limit_error(exc)
+                    and not _is_request_too_large(exc)
+                    and attempt < RATE_LIMIT_MAX_ATTEMPTS
+                ):
                     last_rate_limit_exc = exc
                     # Exponential backoff with jitter, so a burst of
                     # concurrent sessions hitting the same limit don't all

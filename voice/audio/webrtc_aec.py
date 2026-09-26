@@ -9,8 +9,8 @@ from config.constants import (
     CHANNELS,
     REFERENCE_BUFFER_SECONDS,
     FRAME_SAMPLES,
-    _AEC_TYPE_DESKTOP,
-    _INITIAL_SYSTEM_DELAY_MS,
+    AEC_TYPE_DESKTOP,
+    INITIAL_SYSTEM_DELAY_MS,
 )
 from config.logger import logger
 
@@ -21,7 +21,7 @@ class EchoCanceller:
         self,
         sample_rate: int = SAMPLE_RATE,
         channels: int = CHANNELS,
-        stream_delay_ms: int = _INITIAL_SYSTEM_DELAY_MS,
+        stream_delay_ms: int = INITIAL_SYSTEM_DELAY_MS,
     ) -> None:
 
         # The current WebRTC AEC implementation is configured
@@ -55,7 +55,7 @@ class EchoCanceller:
         # enable_vad=False:
         #     Voice activity detection is disabled.
         self._apm = wap.AudioProcessingModule(
-            aec_type=_AEC_TYPE_DESKTOP,
+            aec_type=AEC_TYPE_DESKTOP,
             enable_ns=True,
             agc_type=0,
             enable_vad=False,

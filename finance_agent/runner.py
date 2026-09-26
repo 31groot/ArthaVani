@@ -204,6 +204,10 @@ def _build_llm_chat_model() -> ChatGroq:
             groq_api_key=settings.GROQ_API_KEY,
             model_name=settings.GROQ_MODEL,
             temperature=0.0,
+            # Voice replies are intentionally concise. Capping generation
+            # prevents an unnecessarily large completion budget from adding
+            # to Groq token usage.
+            max_tokens=512,
         )
     except Exception as exc:
         logger.exception("Failed to initialize the Groq LLM.")

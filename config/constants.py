@@ -106,11 +106,24 @@ FRAME_SAMPLES = SAMPLE_RATE * FRAME_MS // 1000  # 160 samples @16kHz
 FRAME_BYTES = FRAME_SAMPLES * 2  # int16 -> 2 bytes/sample
 
 
-_AEC_TYPE_DESKTOP = 2
+AEC_TYPE_DESKTOP = 2
 
 # estimate (ms) of the speaker->mic round trip, used
 # only to seed WebRTC's internal delay search .
-_INITIAL_SYSTEM_DELAY_MS = 100
+INITIAL_SYSTEM_DELAY_MS = 100
+
+# Retry policy for rate-limit-shaped LLM provider failures only (e.g. Groq's
+# tokens-per-minute cap). Other failures (auth, network, bad model name)
+# fail immediately -- retrying those just delays a response that will
+# never succeed.
+RATE_LIMIT_MAX_ATTEMPTS = 3
+RATE_LIMIT_BASE_DELAY_SECONDS = 1.5
+
+
+# Keep the provider request comfortably below small/free-tier TPM caps.
+# The exact token count varies by tokenizer, so we reduce the two biggest
+# sources of prompt growth: unneeded tool schemas and old tool-call history.
+MAX_HISTORY_TURNS = 3
 
 
 
