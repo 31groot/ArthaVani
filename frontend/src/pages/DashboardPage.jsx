@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Clock3, Flame, LogOut, Newspaper, Settings } from "lucide-react";
+import { ArrowRight, Clock3, Flame, LogOut, Newspaper, Settings } from "lucide-react";
 import Brand from "../components/Brand";
 import AssistantCard from "../components/AssistantCard";
 import HoldingsCard from "../components/HoldingsCard";
@@ -9,7 +9,7 @@ import PortfolioHero from "../components/PortfolioHero";
 import RefreshIcon from "../components/RefreshIcon";
 import { dashboard } from "../api";
 
-function DashboardPage({ user, onLogout }) {
+function DashboardPage({ user, growwConnected, onLogout }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -73,16 +73,28 @@ function DashboardPage({ user, onLogout }) {
             <p>Here’s what is happening across your portfolio and the market.</p>
           </div>
           <div className="quick-status">
-            <div className="status-pill">
+            <div className={`status-pill ${growwConnected ? "" : "status-pill-warning"}`}>
               <span className="status-dot" />
-              Groww connected
+              {growwConnected ? "Groww connected" : "Groww not connected"}
             </div>
             <span className="muted">{user.email}</span>
           </div>
         </section>
 
+        {!growwConnected && (
+          <section className="connection-banner">
+            <div>
+              <strong>Groww is skipped for now.</strong>
+              <span>Connect it later to see your live holdings, portfolio value, and P&amp;L.</span>
+            </div>
+            <button className="ghost-button" onClick={() => window.location.assign("/settings/groww")}>
+              Connect Groww <ArrowRight size={15} />
+            </button>
+          </section>
+        )}
+
         <section className="hero-grid">
-          <PortfolioHero data={data?.portfolio} loading={loading} />
+          <PortfolioHero data={data?.portfolio} loading={loading} growwConnected={growwConnected} />
           <AssistantCard />
         </section>
 
@@ -94,7 +106,7 @@ function DashboardPage({ user, onLogout }) {
               items={data?.market_news || []}
               loading={loading}
             />
-            <HoldingsCard holdings={data?.portfolio?.holdings || []} loading={loading} />
+            <HoldingsCard holdings={data?.portfolio?.holdings || []} loading={loading} growwConnected={growwConnected} />
           </div>
 
           <aside className="side-column">

@@ -1,5 +1,28 @@
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "";
 
+const GROWW_SKIP_PREFIX = "arthavani_groww_skipped:";
+
+export function growwSkipKey(user) {
+  const identity = user?.id || user?.email;
+  return identity ? `${GROWW_SKIP_PREFIX}${identity}` : null;
+}
+
+export function isGrowwSkipped(user) {
+  const key = growwSkipKey(user);
+  return Boolean(key && window.localStorage.getItem(key) === "1");
+}
+
+export function setGrowwSkipped(user, skipped = true) {
+  const key = growwSkipKey(user);
+  if (!key) return;
+
+  if (skipped) {
+    window.localStorage.setItem(key, "1");
+  } else {
+    window.localStorage.removeItem(key);
+  }
+}
+
 export function getToken() {
   return localStorage.getItem("arthavani_token");
 }

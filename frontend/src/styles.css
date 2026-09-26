@@ -1339,3 +1339,65 @@ input::placeholder {
     min-width: 690px;
   }
 }
+
+
+/* Groww connection is optional */
+.skip-connection {
+  margin-top: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.text-button {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--text);
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.connection-banner {
+  margin: 0 0 18px;
+  padding: 16px 18px;
+  border: 1px solid var(--border-strong);
+  background: var(--surface-soft);
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.connection-banner > div {
+  display: grid;
+  gap: 4px;
+}
+
+.connection-banner strong {
+  font-size: 13px;
+}
+
+.connection-banner span {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.status-pill-warning {
+  background: #fff7e6;
+  border-color: #edd6a3;
+  color: var(--warning);
+}
+
+@media (max-width: 700px) {
+  .connection-banner {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}

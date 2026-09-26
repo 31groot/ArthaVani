@@ -4,13 +4,21 @@ import AuthPage from "./pages/AuthPage";
 import DashboardPage from "./pages/DashboardPage";
 import GrowwConnectPage from "./pages/GrowwConnectPage";
 import GrowwManagePage from "./pages/GrowwManagePage";
-import { clearToken, getToken, growwStatus, me } from "./api";
+import {
+  clearToken,
+  getToken,
+  growwStatus,
+  isGrowwSkipped,
+  me,
+  setGrowwSkipped,
+} from "./api";
 
 function App() {
   const [session, setSession] = useState({
     loading: true,
     user: null,
     growwConnected: false,
+    growwSkipped: false,
   });
 
   useEffect(() => {
@@ -20,22 +28,24 @@ function App() {
       const token = getToken();
 
       if (!token) {
-        if (active) setSession({ loading: false, user: null, growwConnected: false });
+        if (active) setSession({ loading: false, user: null, growwConnected: false, growwSkipped: false });
         return;
       }
 
       try {
         const [user, groww] = await Promise.all([me(), growwStatus()]);
         if (active) {
+          const growwConnected = Boolean(groww.connected);
           setSession({
             loading: false,
             user,
-            growwConnected: Boolean(groww.connected),
+            growwConnected,
+            growwSkipped: !growwConnected && isGrowwSkipped(user),
           });
         }
       } catch {
         clearToken();
-        if (active) setSession({ loading: false, user: null, growwConnected: false });
+        if (active) setSession({ loading: false, user: null, growwConnected: false, growwSkipped: false });
       }
     }
 
@@ -59,7 +69,7 @@ function App() {
         path="/auth"
         element={
           session.user ? (
-            <Navigate to={session.growwConnected ? "/" : "/connect"} replace />
+            <Navigate to={session.growwConnected || session.growwSkipped ? "/" : "/connect"} replace />
           ) : (
             <AuthPage
               onAuthenticated={(user, growwConnected) =>
@@ -67,6 +77,7 @@ function App() {
                   ...prev,
                   user,
                   growwConnected,
+                  growwSkipped: !growwConnected && isGrowwSkipped(user),
                   loading: false,
                 }))
               }
@@ -85,9 +96,14 @@ function App() {
           ) : (
             <GrowwConnectPage
               user={session.user}
-              onConnected={() =>
-                setSession((prev) => ({ ...prev, growwConnected: true }))
-              }
+              onConnected={() => {
+                setGrowwSkipped(session.user, false);
+                setSession((prev) => ({ ...prev, growwConnected: true, growwSkipped: false }));
+              }}
+              onSkipped={() => {
+                setGrowwSkipped(session.user, true);
+                setSession((prev) => ({ ...prev, growwSkipped: true }));
+              }}
             />
           )
         }
@@ -109,14 +125,15 @@ function App() {
         element={
           !session.user ? (
             <Navigate to="/auth" replace />
-          ) : !session.growwConnected ? (
+          ) : !session.growwConnected && !session.growwSkipped ? (
             <Navigate to="/connect" replace />
           ) : (
             <DashboardPage
               user={session.user}
+              growwConnected={session.growwConnected}
               onLogout={() => {
                 clearToken();
-                setSession({ loading: false, user: null, growwConnected: false });
+                setSession({ loading: false, user: null, growwConnected: false, growwSkipped: false });
               }}
             />
           )

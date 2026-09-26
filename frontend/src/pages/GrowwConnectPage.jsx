@@ -5,7 +5,7 @@ import Brand from "../components/Brand";
 import Step from "../components/Step";
 import { connectGroww } from "../api";
 
-function GrowwConnectPage({ user, onConnected }) {
+function GrowwConnectPage({ user, onConnected, onSkipped }) {
   const navigate = useNavigate();
   const [mode, setMode] = useState("api_key_secret");
   const [apiKey, setApiKey] = useState("");
@@ -123,6 +123,20 @@ function GrowwConnectPage({ user, onConnected }) {
               <ArrowRight size={18} />
             </button>
           </form>
+
+          <div className="skip-connection">
+            <span>Not ready to connect Groww yet?</span>
+            <button
+              type="button"
+              className="text-button"
+              onClick={() => {
+                onSkipped();
+                navigate("/", { replace: true });
+              }}
+            >
+              Skip for now
+            </button>
+          </div>
 
           <div className="secure-strip">
             <ShieldCheck size={17} />

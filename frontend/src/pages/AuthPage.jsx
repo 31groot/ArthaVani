@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { ArrowRight } from "lucide-react";
 import HeroPoint from "../components/HeroPoint";
 import Brand from "../components/Brand";
-import { login, me, register, setToken, growwStatus } from "../api";
+import { isGrowwSkipped, login, me, register, setToken, growwStatus } from "../api";
 import { ShieldCheck, Sparkles, Mic } from "lucide-react";
 
 function AuthPage({ onAuthenticated }) {
@@ -32,8 +32,10 @@ function AuthPage({ onAuthenticated }) {
         growwStatus(),
       ]);
 
-      onAuthenticated(user, Boolean(groww.connected));
-      navigate(groww.connected ? "/" : "/connect", { replace: true });
+      const growwConnected = Boolean(groww.connected);
+      const growwSkipped = !growwConnected && isGrowwSkipped(user);
+      onAuthenticated(user, growwConnected);
+      navigate(growwConnected || growwSkipped ? "/" : "/connect", { replace: true });
     } catch (err) {
       setError(err.message || "Something went wrong.");
     } finally {

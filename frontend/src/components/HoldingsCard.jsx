@@ -1,7 +1,7 @@
 import { ChevronDown } from "lucide-react";
 import { formatINR, formatPct } from "../utils/formatters";
 
-function HoldingsCard({ holdings, loading }) {
+function HoldingsCard({ holdings, loading, growwConnected }) {
   return (
     <div className="card-surface">
       <div className="card-header">
@@ -17,7 +17,7 @@ function HoldingsCard({ holdings, loading }) {
           {[1, 2, 3].map((item) => <div className="skeleton-row" key={item} />)}
         </div>
       ) : holdings.length === 0 ? (
-        <div className="empty-state">No holdings returned by Groww.</div>
+        <div className="empty-state">{growwConnected ? "No holdings returned by Groww." : "Connect Groww to load your holdings."}</div>
       ) : (
         <div className="holdings-table-wrap">
           <table className="holdings-table">
