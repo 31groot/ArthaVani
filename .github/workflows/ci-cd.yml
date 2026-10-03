@@ -59,7 +59,6 @@ jobs:
         env:
           DATABASE_URL: postgresql://arthavani:arthavani@localhost:5432/arthavani
           CONVERSATION_USER_ID: ci-user
-          CONVERSATION_ID: ci
         run: |
           pytest -q tests
 

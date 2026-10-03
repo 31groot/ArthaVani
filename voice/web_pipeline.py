@@ -34,12 +34,10 @@ class BrowserVoicePipeline:
         self,
         *,
         user_id: str,
-        conversation_id: str,
         agent_runner: FinanceAgentRunner | None = None,
     ) -> None:
         self.conversation_identity = ConversationIdentity(
             user_id=user_id,
-            conversation_id=conversation_id,
         )
 
         self.audio_input_queue: asyncio.Queue[bytes] = asyncio.Queue(
@@ -349,7 +347,6 @@ class BrowserVoicePipeline:
         logger.info(
             "Browser voice pipeline started for user=%s conversation=%s",
             self.conversation_identity.user_id,
-            self.conversation_identity.conversation_id,
         )
 
     async def _fanout_loop(self) -> None:
@@ -510,7 +507,6 @@ async def run_browser_voice_session(
     websocket,
     *,
     user_id: str,
-    conversation_id: str,
     agent_runner: FinanceAgentRunner | None = None,
 ) -> None:
     """Run a full duplex WebSocket voice session."""
@@ -522,7 +518,6 @@ async def run_browser_voice_session(
     try:
         pipeline = BrowserVoicePipeline(
             user_id=user_id,
-            conversation_id=conversation_id,
             agent_runner=agent_runner,
         )
         await pipeline.start()

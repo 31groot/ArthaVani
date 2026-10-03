@@ -131,12 +131,11 @@ export function dashboard() {
   return request("/api/v1/dashboard");
 }
 
-export function chat(message, conversationId = "default") {
+export function chat(message) {
   return request("/api/v1/chat", {
     method: "POST",
     body: JSON.stringify({
       message,
-      conversation_id: conversationId,
     }),
   });
 }

@@ -207,7 +207,7 @@ function AssistantCard() {
       socket.binaryType = "arraybuffer";
 
       socket.onopen = () => {
-        socket.send(JSON.stringify({ type: "auth", token, conversation_id: "default" }));
+        socket.send(JSON.stringify({ type: "auth", token, }));
       };
 
       socket.onmessage = async (event) => {

@@ -56,10 +56,9 @@ _active_voice_sessions_lock = asyncio.Lock()
 
 async def _claim_voice_session(
     user_id: str,
-    conversation_id: str,
     websocket: WebSocket,
 ) -> None:
-    key = (user_id, conversation_id)
+    key = (user_id)
     old_socket = None
 
     async with _active_voice_sessions_lock:
@@ -68,9 +67,8 @@ async def _claim_voice_session(
 
     if old_socket is not None and old_socket is not websocket:
         logger.info(
-            "Replacing existing browser voice session for user=%s conversation=%s.",
+            "Replacing existing browser voice session for user=%s",
             user_id,
-            conversation_id,
         )
         try:
             await old_socket.close(code=4001, reason="Replaced by a newer voice session.")
@@ -80,10 +78,9 @@ async def _claim_voice_session(
 
 async def _release_voice_session(
     user_id: str,
-    conversation_id: str,
     websocket: WebSocket,
 ) -> None:
-    key = (user_id, conversation_id)
+    key = (user_id)
     async with _active_voice_sessions_lock:
         if _active_voice_sessions.get(key) is websocket:
             _active_voice_sessions.pop(key, None)
@@ -376,13 +373,9 @@ async def voice(websocket: WebSocket) -> None:
         await websocket.close(code=1008)
         return
 
-    conversation_id = auth_message.get("conversation_id", "default")
-    if not isinstance(conversation_id, str) or not conversation_id.strip():
-        conversation_id = "default"
 
     await _claim_voice_session(
         user_id=user["id"],
-        conversation_id=conversation_id,
         websocket=websocket,
     )
 
@@ -390,7 +383,6 @@ async def voice(websocket: WebSocket) -> None:
         await run_browser_voice_session(
             websocket,
             user_id=user["id"],
-            conversation_id=conversation_id,
         )
     except WebSocketDisconnect:
         return
@@ -412,16 +404,13 @@ async def voice(websocket: WebSocket) -> None:
     finally:
         await _release_voice_session(
             user_id=user["id"],
-            conversation_id=conversation_id,
             websocket=websocket,
         )
 
 
 @app.post("/api/v1/chat", response_model=ChatResponse)
 async def chat(payload: ChatRequest, user: CurrentUser) -> ChatResponse:
-    thread_id = (
-        f"user:{user['id']}:conversation:{payload.conversation_id}"
-    )
+    thread_id = user["id"]
 
     with user_scope(user["id"]):
         answer = await runner.ainvoke(
@@ -431,7 +420,6 @@ async def chat(payload: ChatRequest, user: CurrentUser) -> ChatResponse:
 
     return ChatResponse(
         message=answer,
-        conversation_id=payload.conversation_id,
     )
 
 

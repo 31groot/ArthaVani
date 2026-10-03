@@ -42,9 +42,7 @@ class GrowwConnectionResponse(BaseModel):
 
 class ChatRequest(BaseModel):
     message: str = Field(min_length=1, max_length=4000)
-    conversation_id: str = Field(default="default", min_length=1, max_length=128)
 
 
 class ChatResponse(BaseModel):
     message: str
-    conversation_id: str

@@ -102,7 +102,7 @@ LangGraph conversation state is persisted with PostgreSQL through `AsyncPostgres
 Conversation identity is scoped as:
 
 ```text
-user:{user_id}:conversation:{conversation_id}
+user:{user_id}
 ```
 
 This keeps conversation history separated by authenticated user and conversation.

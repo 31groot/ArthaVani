@@ -33,12 +33,10 @@ class VoicePipeline:
         self,
         *,
         user_id: str | None = None,
-        conversation_id: str | None = None,
     ):
 
         self.conversation_identity = ConversationIdentity(
             user_id=user_id or settings.CONVERSATION_USER_ID,
-            conversation_id=conversation_id or settings.CONVERSATION_ID,
         )
 
         # Queue receiving raw audio from the microphone.
@@ -157,7 +155,6 @@ class VoicePipeline:
         logger.info(
             "Starting Voice Pipeline for user=%s conversation=%s...",
             self.conversation_identity.user_id,
-            self.conversation_identity.conversation_id,
         )
 
         # Initialize the LLM/checkpointer first. If PostgreSQL or Groq is
