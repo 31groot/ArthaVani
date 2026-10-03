@@ -298,17 +298,12 @@ class Microphone:
 
         # Create the SoundDevice input stream.
         self.stream = sd.InputStream(
-            # Number of samples captured per second.
             samplerate=MIC_SAMPLE_RATE,
 
-            # Number of audio channels.
-            # Usually 1 for microphone speech.
             channels=CHANNELS,
 
-            # Capture samples as signed 16-bit PCM.
             dtype="int16",
 
-            # Number of samples passed to the callback per chunk.
             blocksize=CHUNK_SIZE,
 
             # Function called by SoundDevice whenever a new

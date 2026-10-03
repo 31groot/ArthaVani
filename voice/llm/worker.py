@@ -153,7 +153,7 @@ class LLMWorker:
             # Only the new user message is sent -- AsyncPostgresSaver
             # loads the rest of this thread_id's conversation from
             # Postgres automatically inside the graph.
-            # Finance tools resolve the authenticated user through a ContextVar.
+            # Finance tools resolve the authenticated user through a Context.
             # HTTP chat already sets this scope; browser voice must do it too.
             with user_scope(self.conversation_identity.user_id):
                 async for text_chunk in self.agent_runner.astream_text(

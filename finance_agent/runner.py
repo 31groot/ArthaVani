@@ -24,7 +24,7 @@ from finance_agent.tools import build_finance_tools
 
 
 class FinanceAgentRunner:
-    """Run LangGraph with native Python finance tools and optional Postgres persistence."""
+    """Run LangGraph with native Python finance tools and Postgres persistence."""
 
     def __init__(
         self,
