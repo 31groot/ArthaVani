@@ -103,12 +103,6 @@ def _is_rate_limit_error(exc: Exception) -> bool:
     )
 
 
-
-# Keep the provider request comfortably below small/free-tier TPM caps.
-# The exact token count varies by tokenizer, so we reduce the two biggest
-# sources of prompt growth: unneeded tool schemas and old tool-call history.
-MAX_HISTORY_TURNS = 3
-
 TOOL_GROUPS = {
     "portfolio": {
         "get_portfolio_summary",

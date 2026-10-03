@@ -7,7 +7,6 @@ import webrtc_audio_processing as wap
 from config.constants import (
     SAMPLE_RATE,
     CHANNELS,
-    REFERENCE_BUFFER_SECONDS,
     FRAME_SAMPLES,
     AEC_TYPE_DESKTOP,
     INITIAL_SYSTEM_DELAY_MS,

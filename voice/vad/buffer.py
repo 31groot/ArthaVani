@@ -1,4 +1,4 @@
-from config.constants import VAD_FRAME_SAMPLES
+from config.constants import VAD_FRAME_SAMPLES, SAMPLE_WIDTH
 
 
 class AudioBuffer:
@@ -6,7 +6,7 @@ class AudioBuffer:
     def __init__(
         self,
         frame_samples=VAD_FRAME_SAMPLES,
-        sample_width: int = 2,
+        sample_width = SAMPLE_WIDTH,
     ):
 
         # Number of audio samples required to create one complete frame.

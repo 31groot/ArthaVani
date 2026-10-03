@@ -23,15 +23,10 @@ MIC_INPUT_GAIN = 0.5
 # 512 samples at 16 kHz = 32 ms of audio.
 VAD_FRAME_SAMPLES = 512
 
-# Minimum amount of continuous speech required before
-# considering the user to be speaking.
-MIN_SPEECH_DURATION_MS = 250
-
 # Early speech detection used for fast barge-in ducking.
 #
 # The speaker is ducked quickly after a small amount of
-# continuous speech, while actual barge-in cancellation
-# still waits for MIN_SPEECH_DURATION_MS.
+# continuous speech
 POSSIBLE_SPEECH_DURATION_MS = 64
 POSSIBLE_SILENCE_DURATION_MS = 64
 
@@ -54,17 +49,6 @@ SPEECH_THRESHOLD = 0.5
 # 512 samples at 16 kHz = 32 ms.
 FRAME_DURATION_MS = 32
 
-
-# Maximum amount of time allowed for an STT operation.
-STT_TIMEOUT = 30
-
-# Maximum amount of time allowed for an LLM operation.
-LLM_TIMEOUT = 60
-
-# Maximum amount of time allowed for a TTS operation.
-TTS_TIMEOUT = 30
-
-
 # Native sample rate of the physical microphone hardware.
 # The microphone captures audio at 44.1 kHz.
 MIC_SAMPLE_RATE = 44_100
@@ -79,21 +63,6 @@ APPLICATION_SAMPLE_RATE = 16_000
 # Prevents unlimited memory growth when a consumer falls behind.
 MAX_QUEUE_SIZE = 300
 
-
-# Maximum number of messages retained by the conversation history.
-MAX_MESSAGES = 20
-
-
-# Number of taps/samples used by the acoustic echo cancellation filter.
-FILTER_LENGTH = 1024
-
-# Estimated delay between the reference audio and microphone audio,
-# expressed in samples.
-DELAY_SAMPLES = 1600
-
-# Adaptation step size for the echo cancellation filter.
-MU = 0.4
-
 #Full volume of the assistance
 INITIAL_VOL = 1.0
 
@@ -103,9 +72,9 @@ DROPPED_VOL = 0.2
 # WebRTC's AEC operates on fixed 10ms frames.
 FRAME_MS = 10
 FRAME_SAMPLES = SAMPLE_RATE * FRAME_MS // 1000  # 160 samples @16kHz
-FRAME_BYTES = FRAME_SAMPLES * 2  # int16 -> 2 bytes/sample
 
-
+# Configuration value understood by the WebRTC audio-processing library.
+# It means desktop AEC mode
 AEC_TYPE_DESKTOP = 2
 
 # estimate (ms) of the speaker->mic round trip, used
@@ -126,15 +95,6 @@ RATE_LIMIT_BASE_DELAY_SECONDS = 1.5
 MAX_HISTORY_TURNS = 3
 
 
-
-# Amount of speaker/reference audio retained for echo cancellation.
-REFERENCE_BUFFER_SECONDS = 3.0
-
-
-# Maximum number of conversation messages retained by the LLM worker.
-MAX_CONVERSATION_HISTORY = 10
-
-
 # Logging timestamp format.
 LOG_DATE_FORMAT = "%Y-%m-%d %H:%M:%S"
 
@@ -145,5 +105,3 @@ LOG_FORMAT = (
     "%(name)s | "
     "%(message)s"
 )
-
-DATA_AS_OF = "2026-08-22"
