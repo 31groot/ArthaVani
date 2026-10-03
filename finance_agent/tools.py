@@ -316,6 +316,8 @@ def _portfolio_snapshot() -> dict[str, Any]:
             if allocation_total
             else Decimal("0")
         )
+        row["allocation_percentage"] = round(float(weight), 2)
+        
         allocation.append({
             "trading_symbol": row["trading_symbol"],
             "weight_percentage": round(float(weight), 2),
