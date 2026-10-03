@@ -317,7 +317,7 @@ def _portfolio_snapshot() -> dict[str, Any]:
             else Decimal("0")
         )
         row["allocation_percentage"] = round(float(weight), 2)
-        
+
         allocation.append({
             "trading_symbol": row["trading_symbol"],
             "weight_percentage": round(float(weight), 2),
@@ -640,24 +640,28 @@ def watchlist_check() -> dict[str, Any]:
         "has_triggered": bool(triggered),
     }
 
-
 def build_finance_tools() -> list[Any]:
     """Return the lean native voice-agent finance tool set."""
     return [
         # Portfolio
         get_portfolio_summary,
         get_portfolio_risk,
+
         # Company / market data
         yahoo_get_quote,
         yahoo_get_fundamentals,
         yahoo_get_history,
         yahoo_get_technical_analysis,
         yahoo_get_news,
+        yahoo_get_corporate_actions,
+        yahoo_get_earnings_calendar,
+
         # Mutual funds / FX / market status
         amfi_get_latest_nav,
         amfi_get_nav_history,
         convert_currency,
         get_nse_market_status,
+
         # Stateful local alerts
         watchlist_add,
         watchlist_remove,
