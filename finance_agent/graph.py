@@ -134,7 +134,6 @@ TOOL_GROUPS = {
         "watchlist_add",
         "watchlist_remove",
         "watchlist_list",
-        "watchlist_check",
     },
 }
 
@@ -236,10 +235,6 @@ def _select_tools_for_turn(user_text: str, tools: Sequence[BaseTool]) -> list[Ba
 
     watchlist_terms = (
         "watchlist",
-        "price alert",
-        "price alerts",
-        "target price",
-        "alert",
     )
     if any(term in text for term in watchlist_terms):
         selected_names.update(TOOL_GROUPS["watchlist"])

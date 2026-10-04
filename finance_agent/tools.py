@@ -604,47 +604,37 @@ def get_nse_market_status() -> dict[str, Any]:
 @tool
 def watchlist_add(
     ticker: str,
-    condition: str,
-    target_price: float,
     user_id: Annotated[str, InjectedState("user_id")],
 ) -> dict[str, Any]:
-    """Add a persistent price alert, above or below a target."""
-    return _watchlist().add(ticker, condition, target_price, user_id,)
-
-
-@tool
-def watchlist_remove(alert_id: int) -> dict[str, Any]:
-    """Remove a saved price alert by ID."""
-    return {
-        "removed": _watchlist().remove(alert_id),
-        "alert_id": alert_id,
-    }
-
+    """Add a stock ticker to the user's watchlist."""
+    return _watchlist().add(ticker, user_id)
 
 @tool
-def watchlist_list() -> dict[str, Any]:
-    """List active saved price alerts."""
-    alerts = _watchlist().list_active()
-    return {
-        "alerts": alerts,
-        "count": len(alerts),
-        "has_alerts": bool(alerts),
-    }
+def watchlist_remove(
+    ticker: str,
+    user_id: Annotated[str, InjectedState("user_id")],
+) -> dict[str, Any]:
+    """Remove a stock ticker from the user's watchlist."""
 
+    removed = _watchlist().remove(ticker, user_id)
+
+    return {
+        "ticker": ticker.strip().upper(),
+        "removed": removed,
+    }
 
 @tool
-def watchlist_check() -> dict[str, Any]:
-    """Check active saved price alerts against current Yahoo prices.
+def watchlist_list(
+    user_id: Annotated[str, InjectedState("user_id")],
+) -> list[dict[str, Any]]:
+    """Return the user's watchlist with current market prices."""
 
-    A triggered alert is deactivated after firing once. This tool is the
-    polling/checking primitive; a later scheduler can call it periodically.
-    """
-    triggered = check_watchlist(_watchlist(), _yahoo())
-    return {
-        "triggered_alerts": triggered,
-        "count": len(triggered),
-        "has_triggered": bool(triggered),
-    }
+    return get_watchlist_with_prices(
+        _watchlist(),
+        _yahoo(),
+        user_id,
+    )
+
 
 def build_finance_tools() -> list[Any]:
     """Return the lean native voice-agent finance tool set."""

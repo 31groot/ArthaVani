@@ -1,4 +1,5 @@
-"""Persistent, per-user SQLite-backed alert store."""
+"""Persistent, per-user SQLite-backed stock watchlist."""
+
 from __future__ import annotations
 
 import sqlite3
@@ -11,7 +12,7 @@ from finance_agent.providers.yahoo import YahooProvider
 
 
 class WatchlistStore:
-    """SQLite-backed alerts scoped to the authenticated user."""
+    """SQLite-backed watchlist scoped to the authenticated user."""
 
     def __init__(self, path: str) -> None:
         self.path = Path(path)
@@ -21,143 +22,116 @@ class WatchlistStore:
     def _connect(self) -> sqlite3.Connection:
         return sqlite3.connect(self.path)
 
-    @staticmethod
-    def _owner_id() -> str:
-        return user_id
-
     def _initialize(self) -> None:
         with self._connect() as conn:
-            conn.execute("""
-                CREATE TABLE IF NOT EXISTS alerts (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    owner_id TEXT,
-                    ticker TEXT NOT NULL,
-                    condition TEXT NOT NULL,
-                    target_price REAL NOT NULL,
-                    active INTEGER NOT NULL DEFAULT 1,
-                    created_at TEXT NOT NULL,
-                    last_triggered_at TEXT
-                )
-            """)
-            columns = {
-                row[1]
-                for row in conn.execute("PRAGMA table_info(alerts)").fetchall()
-            }
-            if "owner_id" not in columns:
-                conn.execute(
-                    "ALTER TABLE alerts ADD COLUMN owner_id TEXT"
-                )
             conn.execute(
-                "CREATE INDEX IF NOT EXISTS idx_alerts_owner_active "
-                "ON alerts(owner_id, active)"
+                """
+                CREATE TABLE IF NOT EXISTS watchlist (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    owner_id TEXT NOT NULL,
+                    ticker TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    UNIQUE(owner_id, ticker)
+                )
+                """
             )
+
+            conn.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_watchlist_owner
+                ON watchlist(owner_id)
+                """
+            )
+
             conn.commit()
 
-    def add(self, ticker: str, condition: str, target_price: float, user_id: str,):
-        condition = condition.lower().strip()
-        if condition not in {"above", "below"}:
-            raise ValueError("condition must be 'above' or 'below'.")
+    def add(self, ticker: str, user_id: str) -> dict[str, Any]:
+        ticker = ticker.strip().upper()
 
-        owner_id = self._owner_id()
+        if not ticker:
+            raise ValueError("Ticker cannot be empty.")
+
+        created_at = datetime.now(timezone.utc).isoformat()
 
         with self._connect() as conn:
             cursor = conn.execute(
                 """
-                INSERT INTO alerts
-                    (owner_id, ticker, condition, target_price, created_at)
-                VALUES (?, ?, ?, ?, ?)
+                INSERT OR IGNORE INTO watchlist
+                    (owner_id, ticker, created_at)
+                VALUES (?, ?, ?)
                 """,
-                (
-                    owner_id,
-                    ticker.strip().upper(),
-                    condition,
-                    float(target_price),
-                    datetime.now(timezone.utc).isoformat(),
-                ),
+                (user_id, ticker, created_at),
             )
             conn.commit()
+
+            if cursor.rowcount == 0:
+                return {
+                    "ticker": ticker,
+                    "added": False,
+                    "message": "Ticker is already in the watchlist.",
+                }
+
             return {
                 "id": cursor.lastrowid,
-                "ticker": ticker.strip().upper(),
-                "condition": condition,
-                "target_price": float(target_price),
-                "active": True,
+                "ticker": ticker,
+                "added": True,
             }
 
-    def remove(self, alert_id: int) -> bool:
+    def remove(self, ticker: str, user_id: str) -> bool:
+        ticker = ticker.strip().upper()
+
         with self._connect() as conn:
             cursor = conn.execute(
-                "DELETE FROM alerts WHERE id = ? AND owner_id = ?",
-                (alert_id, self._owner_id()),
+                """
+                DELETE FROM watchlist
+                WHERE ticker = ? AND owner_id = ?
+                """,
+                (ticker, user_id),
             )
             conn.commit()
+
             return cursor.rowcount > 0
 
-    def list_active(self) -> list[dict[str, Any]]:
+    def list_for_user(self, user_id: str) -> list[dict[str, Any]]:
         with self._connect() as conn:
             rows = conn.execute(
                 """
-                SELECT id, ticker, condition, target_price,
-                       active, created_at, last_triggered_at
-                FROM alerts
-                WHERE active = 1 AND owner_id = ?
+                SELECT id, ticker, created_at
+                FROM watchlist
+                WHERE owner_id = ?
                 ORDER BY id
                 """,
-                (self._owner_id(),),
+                (user_id,),
             ).fetchall()
 
-        columns = [
-            "id",
-            "ticker",
-            "condition",
-            "target_price",
-            "active",
-            "created_at",
-            "last_triggered_at",
+        columns = ["id", "ticker", "created_at"]
+
+        return [
+            dict(zip(columns, row))
+            for row in rows
         ]
-        return [dict(zip(columns, row)) for row in rows]
-
-    def mark_triggered(self, alert_id: int) -> None:
-        with self._connect() as conn:
-            conn.execute(
-                """
-                UPDATE alerts
-                SET active = 0, last_triggered_at = ?
-                WHERE id = ? AND owner_id = ?
-                """,
-                (
-                    datetime.now(timezone.utc).isoformat(),
-                    alert_id,
-                    self._owner_id(),
-                ),
-            )
-            conn.commit()
 
 
-def check_watchlist(
+def get_watchlist_with_prices(
     store: WatchlistStore,
     yahoo: YahooProvider,
+    user_id: str,
 ) -> list[dict[str, Any]]:
-    triggered: list[dict[str, Any]] = []
+    """Return the user's watchlist with current Yahoo prices."""
 
-    for alert in store.list_active():
-        quote = yahoo.quote(alert["ticker"])
-        price = float(quote["latest_price"])
+    items = store.list_for_user(user_id)
 
-        crossed = (
-            alert["condition"] == "above"
-            and price >= float(alert["target_price"])
-        ) or (
-            alert["condition"] == "below"
-            and price <= float(alert["target_price"])
+    results: list[dict[str, Any]] = []
+
+    for item in items:
+        quote = yahoo.quote(item["ticker"])
+
+        results.append(
+            {
+                **item,
+                "current_price": quote.get("latest_price"),
+                "change_percent": quote.get("change_percent"),
+            }
         )
 
-        if crossed:
-            store.mark_triggered(alert["id"])
-            triggered.append({
-                **alert,
-                "current_price": price,
-                "triggered": True,
-            })
-
-    return triggered
+    return results
