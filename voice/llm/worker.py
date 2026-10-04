@@ -6,7 +6,6 @@ from config.logger import logger
 from finance_agent.conversation import ConversationIdentity
 from finance_agent.errors import LLMProviderError, LLMRateLimitError
 from finance_agent.runner import FinanceAgentRunner
-from finance_agent.user_context import user_scope
 from voice.stt.events import TranscriptEvent
 from voice.text.text_splitter import SentenceSplitter
 
@@ -150,16 +149,15 @@ class LLMWorker:
             # Instead of waiting for the entire answer, the agent
             # yields text chunks as they are generated.
             #
-            # Only the new user message is sent -- AsyncPostgresSaver
+            # Only the new user message is sent, AsyncPostgresSaver
             # loads the rest of this thread_id's conversation from
             # Postgres automatically inside the graph.
-            # Finance tools resolve the authenticated user through a Context.
-            # HTTP chat already sets this scope; browser voice must do it too.
-            with user_scope(self.conversation_identity.user_id):
-                async for text_chunk in self.agent_runner.astream_text(
-                    user_text,
-                    thread_id=self.conversation_identity.thread_id,
-                ):
+
+            async for text_chunk in self.agent_runner.astream_text(
+                user_text,
+                user_id=self.conversation_identity.user_id,
+                thread_id=self.conversation_identity.thread_id,
+            ):
 
                     # Keep the chunk so the full response can be rebuilt later.
                     assistant_response.append(

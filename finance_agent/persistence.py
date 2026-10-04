@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from contextlib import contextmanager
-from typing import Any, Iterator
+from typing import Any, Iterator 
 
 import psycopg
 from psycopg_pool import ConnectionPool
@@ -47,11 +47,7 @@ def _get_pool() -> ConnectionPool:
 
     A module-level pool means every call below reuses a small set of
     already-open connections instead of opening (and TLS-handshaking) a
-    brand new `psycopg.connect()` on every single query, which is what the
-    previous implementation did. `open=False` + explicit `.open()` avoids
-    psycopg_pool's deprecation warning about opening a pool implicitly in
-    `__init__`, and lets us defer connecting until it's actually needed
-    (e.g. so importing this module doesn't require DATABASE_URL to exist).
+    brand new `psycopg.connect()` on every single query.
     """
     global _pool
     if _pool is None:

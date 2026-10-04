@@ -113,7 +113,7 @@ class FinanceAgentRunner:
     async def ainvoke(
         self,
         messages: Sequence[Any] | str,
-        *,
+        user_id: str,
         thread_id: str | None = None,
     ) -> str:
         await self.start()
@@ -129,11 +129,11 @@ class FinanceAgentRunner:
 
         if config is None:
             result = await self._graph.ainvoke(
-                {"messages": _to_langchain_messages(normalized_messages)}
+                {"messages": _to_langchain_messages(normalized_messages)},
             )
         else:
             result = await self._graph.ainvoke(
-                {"messages": _to_langchain_messages(normalized_messages)},
+                {"messages": _to_langchain_messages(normalized_messages), "user_id": user_id},
                 config=config,
             )
 
@@ -142,7 +142,7 @@ class FinanceAgentRunner:
     async def astream_text(
         self,
         messages: Sequence[Any] | str,
-        *,
+        user_id: str,
         thread_id: str | None = None,
     ) -> AsyncIterator[str]:
         await self.start()

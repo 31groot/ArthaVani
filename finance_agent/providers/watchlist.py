@@ -8,10 +8,6 @@ from typing import Any
 
 from config.settings import settings
 from finance_agent.providers.yahoo import YahooProvider
-from finance_agent.user_context import get_current_user_id
-
-
-LEGACY_OWNER = "legacy-local-user"
 
 
 class WatchlistStore:
@@ -27,7 +23,7 @@ class WatchlistStore:
 
     @staticmethod
     def _owner_id() -> str:
-        return get_current_user_id() or LEGACY_OWNER
+        return user_id
 
     def _initialize(self) -> None:
         with self._connect() as conn:
@@ -57,7 +53,7 @@ class WatchlistStore:
             )
             conn.commit()
 
-    def add(self, ticker: str, condition: str, target_price: float) -> dict[str, Any]:
+    def add(self, ticker: str, condition: str, target_price: float, user_id: str,):
         condition = condition.lower().strip()
         if condition not in {"above", "below"}:
             raise ValueError("condition must be 'above' or 'below'.")

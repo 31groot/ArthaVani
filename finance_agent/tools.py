@@ -1,4 +1,3 @@
-
 """Native LangGraph finance tools for ArthaVani."""
 from __future__ import annotations
 
@@ -20,6 +19,8 @@ from finance_agent.providers.groww import (
 from finance_agent.providers.market import market_status
 from finance_agent.providers.yahoo import YahooProvider
 from finance_agent.providers.watchlist import WatchlistStore, check_watchlist
+from typing import Annotated
+from langgraph.prebuilt import InjectedState
 
 
 @lru_cache(maxsize=1)
@@ -48,7 +49,7 @@ def _yahoo_equity_symbol(exchange: str, trading_symbol: str) -> str:
     return f"{trading_symbol.strip().upper()}{suffix}"
 
 
-def _portfolio_snapshot() -> dict[str, Any]:
+def _portfolio_snapshot(user_id: str) -> dict[str, Any]:
     try:
         holdings_payload = get_groww_provider().get_holdings()
     except Exception as exc:
@@ -408,13 +409,17 @@ def _portfolio_snapshot() -> dict[str, Any]:
 
 
 @tool
-def get_portfolio_summary() -> dict[str, Any]:
-    """Get Groww holdings, cost basis, and live valuation/P&L when available."""
-    return _portfolio_snapshot()
-
+def get_portfolio_summary(
+    user_id: Annotated[str, InjectedState("user_id")]
+) -> dict[str, Any]:
+    """Get the user's Groww holdings and portfolio valuation."""
+    return _portfolio_snapshot(user_id)
 
 @tool
-def get_portfolio_risk() -> dict[str, Any]:
+def get_portfolio_risk(
+    user_id: Annotated[str, InjectedState("user_id")]
+) -> dict[str, Any]:
+    
     """Compute portfolio concentration metrics from live value or cost basis."""
     snapshot = _portfolio_snapshot()
 
@@ -601,9 +606,10 @@ def watchlist_add(
     ticker: str,
     condition: str,
     target_price: float,
+    user_id: Annotated[str, InjectedState("user_id")],
 ) -> dict[str, Any]:
     """Add a persistent price alert, above or below a target."""
-    return _watchlist().add(ticker, condition, target_price)
+    return _watchlist().add(ticker, condition, target_price, user_id,)
 
 
 @tool

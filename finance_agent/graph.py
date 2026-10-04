@@ -16,6 +16,9 @@ from finance_agent.errors import LLMProviderError, LLMRateLimitError
 from config.constants import RATE_LIMIT_MAX_ATTEMPTS, RATE_LIMIT_BASE_DELAY_SECONDS, MAX_HISTORY_TURNS
 
 
+class FinanceAgentState(MessagesState):
+    user_id: str
+
 FINANCE_AGENT_SYSTEM_PROMPT = """
 You are ArthaVani, a real-time AI voice assistant for personal finance and
 market research.
@@ -145,6 +148,9 @@ def _select_tools_for_turn(user_text: str, tools: Sequence[BaseTool]) -> list[Ba
     text = user_text.lower()
     selected_names: set[str] = set()
 
+    #If the tool grows, can shift it to semantic based tool routing 
+    #Currently using the keyword based rounting 
+
     portfolio_terms = (
         "portfolio",
         "holding",
@@ -246,13 +252,7 @@ def _recent_model_messages(
     *,
     max_turns: int = MAX_HISTORY_TURNS,
 ) -> list:
-    """Keep current-turn tool context plus a small text-only conversation window.
 
-    Old ToolMessages can be very large (for example historical price data).
-    They are not useful enough to justify replaying them on every new turn.
-    The current turn remains intact so the model can answer from fresh tool
-    results.
-    """
     human_indices = [
         index
         for index, message in enumerate(state_messages)
@@ -260,7 +260,7 @@ def _recent_model_messages(
     ]
 
     if not human_indices:
-        return list(state_messages)[-8:]
+        return []
 
     current_start = human_indices[-1]
     prior_start = human_indices[-max_turns] if len(human_indices) >= max_turns else 0
@@ -300,8 +300,6 @@ def build_finance_agent_graph(
     passed in each call's config. This lets a conversation resume across
     process restarts and keeps concurrent sessions correctly isolated.
 
-    When `checkpointer` is None, the graph is stateless: each `ainvoke`/
-    `astream` call only sees the messages explicitly passed to it.
     """
     async def call_model(state: MessagesState) -> dict:
         # The system prompt is prepended here, at inference time, rather
@@ -386,10 +384,11 @@ def build_finance_agent_graph(
             f"{provider_name} is currently rate-limited."
         ) from last_rate_limit_exc
 
-    builder = StateGraph(MessagesState)
+    builder = StateGraph(FinanceAgentState)
     builder.add_node("call_model", call_model)
     builder.add_node("tools", ToolNode(list(tools)))
     builder.add_edge(START, "call_model")
     builder.add_conditional_edges("call_model", tools_condition)
     builder.add_edge("tools", "call_model")
     return builder.compile(checkpointer=checkpointer)
+    

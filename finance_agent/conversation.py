@@ -1,17 +1,10 @@
-from dataclasses import dataclass
+from pydantic import BaseModel, ConfigDict
 
 
-@dataclass(frozen=True, slots=True)
-class ConversationIdentity:
+class ConversationIdentity(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
     user_id: str
-
-    def __post_init__(self) -> None:
-        user_id = self.user_id.strip()
-
-        if not user_id:
-            raise ValueError("user_id must not be empty.")
-
-        object.__setattr__(self, "user_id", user_id)
 
     @property
     def thread_id(self) -> str:

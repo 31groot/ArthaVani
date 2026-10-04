@@ -10,7 +10,6 @@ from typing import Any
 from config.settings import settings
 from finance_agent.groww_credentials import decrypt_credentials
 from finance_agent.persistence import get_groww_connection
-from finance_agent.user_context import get_current_user_id
 
 
 class GrowwProvider:
@@ -90,7 +89,7 @@ class GrowwProvider:
             ) as _groww_stdout, redirect_stdout(_groww_stdout):
                 return getattr(self.client, method_name)(**kwargs)
 
-    def get_holdings(self) -> dict[str, Any]:
+    def get_holdings(self,user_id: str):
         return self._call("get_holdings_for_user")
 
     def get_positions(self, segment: str | None = None) -> dict[str, Any]:
@@ -159,12 +158,6 @@ def build_groww_provider_from_credentials(
         credentials=credentials,
     )
 
-
-@lru_cache(maxsize=1)
-def _legacy_groww_provider() -> GrowwProvider:
-    return GrowwProvider()
-
-
 @lru_cache(maxsize=64)
 def _user_groww_provider(
     user_id: str,
@@ -173,34 +166,32 @@ def _user_groww_provider(
     encrypted_credentials: str,
 ) -> GrowwProvider:
     del updated_at
+
     credentials = decrypt_credentials(encrypted_credentials)
+
     return GrowwProvider(
         auth_mode=auth_mode,
         credentials=credentials,
     )
 
 
-def get_groww_provider() -> GrowwProvider:
-    """Return the provider for the authenticated user or local env fallback."""
-    user_id = get_current_user_id()
-
-    if not user_id:
-        return _legacy_groww_provider()
-
+def get_groww_provider(user_id: str) -> GrowwProvider:
+    """Return the Groww provider for the given user."""
     connection = get_groww_connection(user_id)
+
     if connection is None:
         raise RuntimeError(
             "Groww is not connected for this user. Connect Groww first."
         )
 
     updated_at = str(connection["updated_at"])
+
     return _user_groww_provider(
         user_id,
         updated_at,
         connection["auth_mode"],
         connection["encrypted_credentials"],
     )
-
 
 def holding_rows(payload: dict[str, Any]) -> list[dict[str, Any]]:
     if not isinstance(payload, dict):

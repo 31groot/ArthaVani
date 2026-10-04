@@ -24,7 +24,6 @@ class Settings(BaseSettings):
 
     DATABASE_URL: str | None = None
 
-    CONVERSATION_USER_ID: str = "default-user"
 
     # FastAPI authentication
     API_JWT_SECRET_KEY: str = ""

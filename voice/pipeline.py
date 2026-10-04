@@ -153,7 +153,7 @@ class VoicePipeline:
             )
 
         logger.info(
-            "Starting Voice Pipeline for user=%s conversation=%s...",
+            "Starting Voice Pipeline for user/thread=%s...",
             self.conversation_identity.user_id,
         )
 

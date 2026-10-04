@@ -39,7 +39,6 @@ from finance_agent.persistence import (
     initialize_database,
 )
 from finance_agent.runner import FinanceAgentRunner
-from finance_agent.user_context import user_scope
 from finance_agent.providers.groww import build_groww_provider_from_credentials
 from finance_agent.tools import get_portfolio_summary
 from voice.web_pipeline import run_browser_voice_session
@@ -334,8 +333,7 @@ async def groww_disconnect(user: CurrentUser) -> None:
 
 @app.get("/api/v1/portfolio/summary")
 async def portfolio_summary(user: CurrentUser) -> dict:
-    with user_scope(user["id"]):
-        return await get_portfolio_summary.ainvoke({})
+    return await get_portfolio_summary.ainvoke({})
 
 
 @app.websocket("/api/v1/voice")
@@ -412,11 +410,10 @@ async def voice(websocket: WebSocket) -> None:
 async def chat(payload: ChatRequest, user: CurrentUser) -> ChatResponse:
     thread_id = user["id"]
 
-    with user_scope(user["id"]):
-        answer = await runner.ainvoke(
-            payload.message,
-            thread_id=thread_id,
-        )
+    answer = await runner.ainvoke(
+       payload.message,
+       thread_id=thread_id,
+    )
 
     return ChatResponse(
         message=answer,
