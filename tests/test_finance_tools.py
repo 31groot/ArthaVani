@@ -12,12 +12,20 @@ class FinanceToolSupportTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             store = WatchlistStore(str(Path(tmp) / "watchlist.db"))
 
-            alert = store.add("TCS.NS", "above", 4000)
-            self.assertEqual(alert["ticker"], "TCS.NS")
-            self.assertEqual(len(store.list_active()), 1)
+            added = store.add("TCS.NS", "alice")
 
-            self.assertTrue(store.remove(alert["id"]))
-            self.assertEqual(store.list_active(), [])
+            self.assertTrue(added["added"])
+            self.assertEqual(added["ticker"], "TCS.NS")
+
+            items = store.list_for_user("alice")
+
+            self.assertEqual(len(items), 1)
+            self.assertEqual(items[0]["ticker"], "TCS.NS")
+
+            removed = store.remove("TCS.NS", "alice")
+
+            self.assertTrue(removed)
+            self.assertEqual(store.list_for_user("alice"), [])
 
     def test_market_status_has_expected_shape(self) -> None:
         result = market_status()

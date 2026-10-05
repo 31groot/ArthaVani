@@ -133,6 +133,7 @@ async def test_postgres_survives_runner_restart():
     try:
         first = await first_runner.ainvoke(
             "My favorite color is blue.",
+            user_id="test-user",
             thread_id=thread_id,
         )
         assert first == "Okay, I will remember that."
@@ -147,6 +148,7 @@ async def test_postgres_survives_runner_restart():
     try:
         second = await second_runner.ainvoke(
             "What color did I tell you?",
+            user_id="test-user",
             thread_id=thread_id,
         )
         assert second == "You told me blue."

@@ -17,7 +17,9 @@ class PortfolioAuthFailureTests(unittest.TestCase):
             "finance_agent.tools.get_groww_provider",
             return_value=RaisingGrowwProvider(),
         ):
-            result = get_portfolio_summary.invoke({})
+            result = get_portfolio_summary.invoke({
+                "user_id": "test-user",
+            })
 
         self.assertFalse(result["portfolio_data_available"])
         self.assertFalse(result["market_data_available"])
@@ -30,7 +32,9 @@ class PortfolioAuthFailureTests(unittest.TestCase):
             "finance_agent.tools.get_groww_provider",
             return_value=RaisingGrowwProvider(),
         ):
-            result = get_portfolio_risk.invoke({})
+            result = get_portfolio_risk.invoke({
+                "user_id": "test-user",
+            })
 
         self.assertFalse(result["portfolio_data_available"])
         self.assertIsNone(result["concentration_hhi"])

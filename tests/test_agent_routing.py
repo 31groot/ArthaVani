@@ -110,7 +110,8 @@ class AgentRoutingTests(unittest.IsolatedAsyncioTestCase):
         model = FakeChatModel()
         runner = self._runner(model)
         result = await runner.ainvoke(
-            [{"role": "user", "content": "What's my portfolio P&L?"}]
+            [{"role": "user", "content": "What's my portfolio P&L?"}],
+            user_id="test-user",
         )
         self.assertEqual(model.tool_calls, ["get_portfolio_summary"])
         self.assertIn("Tool result received", result)
@@ -119,7 +120,8 @@ class AgentRoutingTests(unittest.IsolatedAsyncioTestCase):
         model = FakeChatModel()
         runner = self._runner(model)
         result = await runner.ainvoke(
-            [{"role": "user", "content": "How concentrated is my portfolio?"}]
+            [{"role": "user", "content": "How concentrated is my portfolio?"}],
+            user_id="test-user",
         )
         self.assertEqual(model.tool_calls, ["get_portfolio_risk"])
         self.assertIn("Tool result received", result)
@@ -128,7 +130,8 @@ class AgentRoutingTests(unittest.IsolatedAsyncioTestCase):
         model = FakeChatModel()
         runner = self._runner(model)
         result = await runner.ainvoke(
-            [{"role": "user", "content": "What's the price of Infosys?"}]
+            [{"role": "user", "content": "What's the price of Infosys?"}],
+            user_id="test-user",
         )
         self.assertEqual(model.tool_calls, ["yahoo_get_quote"])
         self.assertIn("Tool result received", result)
@@ -137,7 +140,8 @@ class AgentRoutingTests(unittest.IsolatedAsyncioTestCase):
         model = FakeChatModel()
         runner = self._runner(model)
         result = await runner.ainvoke(
-            [{"role": "user", "content": "Convert 100 USD to INR."}]
+            [{"role": "user", "content": "Convert 100 USD to INR."}],
+            user_id="test-user",
         )
         self.assertEqual(model.tool_calls, ["convert_currency"])
         self.assertIn("Tool result received", result)

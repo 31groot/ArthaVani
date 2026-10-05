@@ -161,7 +161,9 @@ class FinanceAgentRunnerTests(unittest.IsolatedAsyncioTestCase):
 
         answer = await runner.ainvoke([
             {"role": "user", "content": "What is my checking balance?"}
-        ])
+        ],
+        user_id="test-user",
+        )
 
         self.assertEqual(answer, "Your checking balance is $2,486.75.")
         self.assertEqual(
@@ -218,7 +220,9 @@ class FinanceAgentRunnerTests(unittest.IsolatedAsyncioTestCase):
 
         answer = await runner.ainvoke([
             {"role": "user", "content": "Give me a combined finance summary."}
-        ])
+        ],
+        user_id="test-user",
+        )
 
         self.assertEqual(
             {name for name, _ in calls},
@@ -259,7 +263,10 @@ class FinanceAgentRunnerTests(unittest.IsolatedAsyncioTestCase):
         )
 
         with self.assertRaises(LLMProviderError) as context:
-            await runner.ainvoke("Hello")
+            await runner.ainvoke(
+                "Hello",
+                user_id="test-user",
+            )
 
         self.assertIn("LLM request failed", str(context.exception))
         await runner.stop()
@@ -275,9 +282,10 @@ class FinanceAgentRunnerTests(unittest.IsolatedAsyncioTestCase):
         runner = FinanceAgentRunner(chat_model=model, tools=tools)
 
         chunks = []
-        async for chunk in runner.astream_text([
-            {"role": "user", "content": "Hello"}
-        ]):
+        async for chunk in runner.astream_text(
+            [{"role": "user", "content": "Hello"}],
+            user_id="test-user",
+        ):
             chunks.append(chunk)
 
         self.assertTrue(chunks)
