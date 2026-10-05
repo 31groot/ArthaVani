@@ -67,6 +67,7 @@ def _portfolio_snapshot(user_id: str) -> dict[str, Any]:
             "allocation": [],
             "currency": "INR",
             "portfolio_data_available": False,
+            "groww_connection_available": False,
             "market_data_available": False,
             "market_data_realtime": False,
             "valuation_basis": "unavailable",
@@ -90,6 +91,7 @@ def _portfolio_snapshot(user_id: str) -> dict[str, Any]:
             "allocation": [],
             "currency": "INR",
             "portfolio_data_available": True,
+            "groww_connection_available": True,
             "market_data_available": True,
             "valuation_basis": "none",
             "market_data_error": None,
@@ -376,6 +378,7 @@ def _portfolio_snapshot(user_id: str) -> dict[str, Any]:
     return {
         "holding_count": len(output_rows),
         "portfolio_data_available": True,
+        "groww_connection_available": True,
         "invested_value": round(float(invested_total), 2),
         "current_value": (
             round(float(current_total), 2)

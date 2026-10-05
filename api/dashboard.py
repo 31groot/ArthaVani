@@ -77,6 +77,14 @@ async def build_dashboard(user_id: str) -> dict[str, Any]:
 
     hot_news = _sort_news(merged)[:8]
 
+    # If Groww is unavailable or there are no holding-specific headlines,
+    # keep the dashboard useful by falling back to general market headlines.
+    if not hot_news:
+        hot_news = [
+            {**item, "ticker": None}
+            for item in _sort_news(market_news)[:8]
+        ]
+
     try:
         current_market_status = await asyncio.to_thread(
             market_status,

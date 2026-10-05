@@ -60,7 +60,7 @@ function GrowwManagePage({ user }) {
     setSuccess("");
     try {
       await disconnectGroww();
-      window.location.assign("/connect");
+      navigate("/connect", { replace: true });
     } catch (err) {
       setError(err.message || "Could not disconnect Groww.");
     } finally {

@@ -18,16 +18,37 @@ from finance_agent.persistence import (
 
 def get_status(user_id: str) -> dict[str, Any]:
     connection = get_groww_connection(user_id)
+
     if connection is None:
-        return {"connected": False}
+        return {
+            "connected": False,
+            "reason": "not_connected",
+        }
+
+    try:
+        # Validate that the stored credentials can still obtain a
+        # working Groww session and access the user's portfolio.
+        from finance_agent.providers.groww import get_groww_provider
+
+        groww = get_groww_provider(user_id)
+        groww.get_holdings()
+
+    except Exception as exc:
+        return {
+            "connected": False,
+            "reason": "credentials_expired",
+            "auth_mode": connection["auth_mode"],
+            "connected_at": connection["created_at"],
+            "updated_at": connection["updated_at"],
+        }
 
     return {
         "connected": True,
+        "reason": "active",
         "auth_mode": connection["auth_mode"],
         "connected_at": connection["created_at"],
         "updated_at": connection["updated_at"],
     }
-
 
 def connect_once(
     user_id: str,

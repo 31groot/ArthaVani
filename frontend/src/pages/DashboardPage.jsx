@@ -8,11 +8,13 @@ import NewsCard from "../components/NewsCard";
 import PortfolioHero from "../components/PortfolioHero";
 import RefreshIcon from "../components/RefreshIcon";
 import { dashboard } from "../api";
+import { useNavigate } from "react-router-dom";
 
 function DashboardPage({ user, growwConnected, onLogout }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const navigate = useNavigate();
 
   async function loadDashboard() {
     try {
@@ -54,7 +56,7 @@ function DashboardPage({ user, growwConnected, onLogout }) {
             {data?.updated_at ? "Updated just now" : "Syncing"}
           </span>
           <div className="avatar">{userInitial}</div>
-          <button className="icon-button" title="Manage Groww connection" onClick={() => window.location.assign("/settings/groww")}>
+          <button className="icon-button" title="Manage Groww connection" onClick={() => navigate("/settings/groww")}>
             <Settings size={17} />
           </button>
           <button className="icon-button" title="Sign out" onClick={onLogout}>
@@ -68,7 +70,7 @@ function DashboardPage({ user, growwConnected, onLogout }) {
 
         <section className="dashboard-intro">
           <div>
-            <div className="eyebrow">THURSDAY, YOUR MONEY AT A GLANCE</div>
+            <div className="eyebrow">YOUR MONEY AT A GLANCE</div>
             <h1>Good morning.</h1>
             <p>Here’s what is happening across your portfolio and the market.</p>
           </div>
@@ -87,7 +89,7 @@ function DashboardPage({ user, growwConnected, onLogout }) {
               <strong>Groww is skipped for now.</strong>
               <span>Connect it later to see your live holdings, portfolio value, and P&amp;L.</span>
             </div>
-            <button className="ghost-button" onClick={() => window.location.assign("/settings/groww")}>
+            <button className="ghost-button" onClick={() => navigate("/settings/groww")}>
               Connect Groww <ArrowRight size={15} />
             </button>
           </section>
