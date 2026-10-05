@@ -1,11 +1,63 @@
 services:
+  # React/Vite frontend
   - type: web
     runtime: static
     name: ArthaVani-1
-    buildCommand: npm install && npm run build
-    staticPublishPath: frontend/dist
+    rootDir: frontend
+    buildCommand: npm ci && npm run build
+    staticPublishPath: dist
+
+    envVars:
+      - key: VITE_API_BASE_URL
+        value: https://arthavani.onrender.com
+
+      - key: VITE_VOICE_WS_URL
+        value: wss://arthavani.onrender.com
 
     routes:
       - type: rewrite
         source: /*
         destination: /index.html
+
+  # FastAPI backend
+  - type: web
+    runtime: python
+    name: ArthaVani
+    rootDir: .
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn api.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+
+      - key: GROQ_API_KEY
+        sync: false
+
+      - key: GROQ_MODEL
+        sync: false
+
+      - key: DEEPGRAM_API_KEY
+        sync: false
+
+      - key: DEEPGRAM_MODEL
+        value: nova-3
+
+      - key: API_JWT_SECRET_KEY
+        sync: false
+
+      - key: API_JWT_ALGORITHM
+        value: HS256
+
+      - key: API_JWT_EXPIRE_MINUTES
+        value: "60"
+
+      - key: API_CORS_ORIGINS
+        value: '["https://arthavani-1.onrender.com"]'
+
+      - key: GROWW_CREDENTIALS_ENCRYPTION_KEY
+        sync: false
+
+      - key: LOG_LEVEL
+        value: info
