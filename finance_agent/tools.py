@@ -18,9 +18,12 @@ from finance_agent.providers.groww import (
 )
 from finance_agent.providers.market import market_status
 from finance_agent.providers.yahoo import YahooProvider
-from finance_agent.providers.watchlist import WatchlistStore, check_watchlist
 from typing import Annotated
 from langgraph.prebuilt import InjectedState
+from finance_agent.providers.watchlist import (
+    WatchlistStore,
+    get_watchlist_with_prices,
+)
 
 
 @lru_cache(maxsize=1)
@@ -51,7 +54,7 @@ def _yahoo_equity_symbol(exchange: str, trading_symbol: str) -> str:
 
 def _portfolio_snapshot(user_id: str) -> dict[str, Any]:
     try:
-        holdings_payload = get_groww_provider().get_holdings()
+        holdings_payload = get_groww_provider(user_id).get_holdings()
     except Exception as exc:
         return {
             "holding_count": None,
@@ -115,7 +118,7 @@ def _portfolio_snapshot(user_id: str) -> dict[str, Any]:
 
     if requests:
         try:
-            response = get_groww_provider().get_ltp("CASH", requests)
+            response = get_groww_provider(user_id).get_ltp("CASH", requests)
             if isinstance(response, dict):
                 ltp = response
                 groww_live_available = all(
@@ -133,7 +136,7 @@ def _portfolio_snapshot(user_id: str) -> dict[str, Any]:
 
             exchange, symbol = request_symbol.split("_", 1)
             try:
-                quote = get_groww_provider().get_quote(
+                quote = get_groww_provider(user_id).get_quote(
                     exchange=exchange,
                     segment="CASH",
                     trading_symbol=symbol,
@@ -419,9 +422,8 @@ def get_portfolio_summary(
 def get_portfolio_risk(
     user_id: Annotated[str, InjectedState("user_id")]
 ) -> dict[str, Any]:
-    
     """Compute portfolio concentration metrics from live value or cost basis."""
-    snapshot = _portfolio_snapshot()
+    snapshot = _portfolio_snapshot(user_id)
 
     if not snapshot.get("portfolio_data_available", False):
         return {
@@ -658,9 +660,8 @@ def build_finance_tools() -> list[Any]:
         convert_currency,
         get_nse_market_status,
 
-        # Stateful local alerts
+        # Stateful local watchlist
         watchlist_add,
         watchlist_remove,
         watchlist_list,
-        watchlist_check,
     ]

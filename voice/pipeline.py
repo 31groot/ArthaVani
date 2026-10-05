@@ -36,7 +36,7 @@ class VoicePipeline:
     ):
 
         self.conversation_identity = ConversationIdentity(
-            user_id=user_id or settings.CONVERSATION_USER_ID,
+            user_id=user_id
         )
 
         # Queue receiving raw audio from the microphone.

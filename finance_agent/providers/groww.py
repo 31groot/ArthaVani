@@ -89,7 +89,7 @@ class GrowwProvider:
             ) as _groww_stdout, redirect_stdout(_groww_stdout):
                 return getattr(self.client, method_name)(**kwargs)
 
-    def get_holdings(self,user_id: str):
+    def get_holdings(self):
         return self._call("get_holdings_for_user")
 
     def get_positions(self, segment: str | None = None) -> dict[str, Any]:
