@@ -411,14 +411,14 @@ async def chat(payload: ChatRequest, user: CurrentUser) -> ChatResponse:
     thread_id = user["id"]
 
     answer = await runner.ainvoke(
-       payload.message,
-       thread_id=thread_id,
+        payload.message,
+        user_id=user["id"],
+        thread_id=thread_id,
     )
 
     return ChatResponse(
         message=answer,
     )
-
 
 @app.get("/api/v1")
 async def api_root() -> dict[str, str]:

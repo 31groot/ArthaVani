@@ -127,13 +127,17 @@ class FinanceAgentRunner:
         )
         config = self._build_config(thread_id)
 
+        payload = {
+            "messages": _to_langchain_messages(normalized_messages),
+            "user_id": user_id,
+        }
+
         if config is None:
-            result = await self._graph.ainvoke(
-                {"messages": _to_langchain_messages(normalized_messages)},
-            )
+            result = await self._graph.ainvoke(payload)
+            
         else:
             result = await self._graph.ainvoke(
-                {"messages": _to_langchain_messages(normalized_messages), "user_id": user_id},
+                payload,
                 config=config,
             )
 
@@ -154,8 +158,13 @@ class FinanceAgentRunner:
             if isinstance(messages, str)
             else messages
         )
+
         config = self._build_config(thread_id)
-        payload = {"messages": _to_langchain_messages(normalized_messages)}
+
+        payload = {
+            "messages": _to_langchain_messages(normalized_messages),
+            "user_id": user_id,
+        }
 
         if config is None:
             stream = self._graph.astream(
