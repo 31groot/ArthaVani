@@ -1,11 +1,17 @@
-
 """Yahoo Finance provider and local technical-analysis helpers."""
 from __future__ import annotations
 
 from datetime import datetime
+from threading import Lock
+from time import monotonic
 from typing import Any
+from urllib.parse import quote_plus
+from xml.etree import ElementTree as ET
 
+import requests
 import yfinance as yf
+
+from config.logger import logger
 
 
 # India-first aliases for common Indian equities.
@@ -28,6 +34,16 @@ INDIA_TICKER_ALIASES: dict[str, str] = {
     "DATAPATTNS": "DATAPATTNS.NS",
     "BSE": "BSE.NS",
 }
+
+
+NEWS_CACHE_TTL_SECONDS = 60
+
+_news_cache: dict[
+    tuple[str, int],
+    tuple[float, list[dict[str, Any]]],
+] = {}
+
+_news_cache_lock = Lock()
 
 
 def normalize_symbol(symbol: str) -> str:
@@ -171,31 +187,69 @@ class YahooProvider:
         }
 
     def news(self, symbol: str, count: int = 5) -> list[dict[str, Any]]:
-        items = self.ticker(symbol).get_news(count=max(1, min(count, 10))) or []
+        normalized = normalize_symbol(symbol)
+        count = max(1, min(count, 10))
+        cache_key = (normalized, count)
+
+        now = monotonic()
+
+        with _news_cache_lock:
+            cached = _news_cache.get(cache_key)
+
+        if cached is not None:
+            cached_at, cached_items = cached
+            if now - cached_at < NEWS_CACHE_TTL_SECONDS:
+                return list(cached_items)
+
         result: list[dict[str, Any]] = []
-        for item in items:
-            content = item.get("content", item)
-            if not isinstance(content, dict):
-                continue
 
-            title = content.get("title")
-            if not title:
-                continue
+        # Primary provider: Yahoo Finance.
+        try:
+            items = (
+                self.ticker(normalized).get_news(count=count)
+                or []
+            )
 
-            result.append({
-                "title": title,
-                "publisher": (
-                    content.get("provider", {}) or {}
-                ).get("displayName")
-                if isinstance(content.get("provider"), dict)
-                else None,
-                "published": content.get("pubDate"),
-                "url": (
-                    (content.get("canonicalUrl") or {}).get("url")
-                    if isinstance(content.get("canonicalUrl"), dict)
-                    else None
-                ),
-            })
+            for item in items:
+                content = item.get("content", item)
+
+                if not isinstance(content, dict):
+                    continue
+
+                title = content.get("title")
+
+                if not title:
+                    continue
+
+                result.append({
+                    "title": title,
+                    "publisher": (
+                        content.get("provider", {}) or {}
+                    ).get("displayName")
+                    if isinstance(content.get("provider"), dict)
+                    else None,
+                    "published": content.get("pubDate"),
+                    "url": (
+                        (content.get("canonicalUrl") or {}).get("url")
+                        if isinstance(content.get("canonicalUrl"), dict)
+                        else None
+                    ),
+                })
+
+        except Exception:
+            logger.exception(
+                "Yahoo news fetch failed for %s. "
+                "Trying RSS fallback.",
+                normalized,
+            )
+
+        # Fallback provider: Google News RSS.
+        if not result:
+            result = _google_news_rss(normalized, count)
+
+        with _news_cache_lock:
+            _news_cache[cache_key] = (now, list(result))
+
         return result
 
     def corporate_actions(self, symbol: str, period: str = "1y") -> dict[str, Any]:
@@ -230,6 +284,79 @@ class YahooProvider:
             result["calendar"] = str(calendar)
 
         return result
+
+
+def _google_news_rss(
+    symbol: str,
+    count: int,
+) -> list[dict[str, Any]]:
+    """Fetch a small set of India-focused headlines from Google News RSS."""
+
+    if symbol == "^NSEI":
+        query = "NIFTY 50 NSE India"
+    else:
+        base_symbol = symbol.removesuffix(".NS")
+        query = f"{base_symbol} stock India"
+
+    url = (
+        "https://news.google.com/rss/search"
+        f"?q={quote_plus(query)}"
+        "&hl=en-IN"
+        "&gl=IN"
+        "&ceid=IN:en"
+    )
+
+    headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (X11; Linux x86_64) "
+            "AppleWebKit/537.36 "
+            "(KHTML, like Gecko) "
+            "Chrome/131.0 Safari/537.36"
+        )
+    }
+
+    try:
+        response = requests.get(
+            url,
+            headers=headers,
+            timeout=8,
+        )
+        response.raise_for_status()
+
+        root = ET.fromstring(response.text)
+
+        result: list[dict[str, Any]] = []
+
+        for item in root.findall(".//item")[:count]:
+            title = item.findtext("title")
+            published = item.findtext("pubDate")
+            link = item.findtext("link")
+
+            source_node = item.find("source")
+            publisher = (
+                source_node.text
+                if source_node is not None
+                else None
+            )
+
+            if not title:
+                continue
+
+            result.append({
+                "title": title,
+                "publisher": publisher,
+                "published": published,
+                "url": link,
+            })
+
+        return result
+
+    except Exception:
+        logger.exception(
+            "Google News RSS fallback failed for %s.",
+            symbol,
+        )
+        return []
 
 
 def _number(value: Any) -> float | int | None:
