@@ -53,6 +53,6 @@ fastapi
 uvicorn==0.54.0
 PyJWT
 pwdlib[argon2]
-cryptography
+cryptography==50.0.2
 email-validator
 python-multipart

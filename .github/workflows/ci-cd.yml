@@ -1,4 +1,4 @@
-name: ArthaVani CI/CD
+name: ArthaVani CI
 
 on:
   push:
@@ -33,14 +33,17 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: "3.11"
           cache: pip
           cache-dependency-path: requirements-dev.txt
+
+      - name: Show Python version
+        run: python --version
 
       - name: Install backend dependencies
         run: |
@@ -53,12 +56,11 @@ jobs:
 
       - name: Compile Python sources
         run: |
-          python -m compileall api config finance_agent voice tests main.py
+          python -m compileall api config finance_agent voice tests
 
       - name: Run backend tests
         env:
           DATABASE_URL: postgresql://arthavani:arthavani@localhost:5432/arthavani
-          CONVERSATION_USER_ID: ci-user
         run: |
           pytest -q tests
 
@@ -72,7 +74,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -85,6 +87,9 @@ jobs:
         run: npm ci
 
       - name: Build frontend
+        env:
+          VITE_API_BASE_URL: https://arthavani.onrender.com
+          VITE_VOICE_WS_URL: wss://arthavani.onrender.com
         run: npm run build
 
       - name: Upload frontend build
