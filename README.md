@@ -4,7 +4,7 @@
 
 It combines a React dashboard, FastAPI backend, LangGraph finance agent, Groww portfolio integration, market-data providers, and a real-time browser voice pipeline.
 
-> **Live demo:** `https://arthavani-1.onrender.com/#/`
+> **Live demo:** `https://arthavani-1.onrender.com/`
 
 ## What it solves
 
