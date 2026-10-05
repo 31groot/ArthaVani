@@ -77,9 +77,22 @@ async def build_dashboard(user_id: str) -> dict[str, Any]:
 
     hot_news = _sort_news(merged)[:8]
 
+    try:
+        current_market_status = await asyncio.to_thread(
+            market_status,
+        )
+    except Exception:
+        logger.exception("Market-status fetch failed.")
+        current_market_status = {
+            "exchange": "NSE",
+            "segment": "equity",
+            "open": None,
+            "reason": "status_unavailable",
+            "status_verified": False,
+        }
     return {
         "updated_at": datetime.now(timezone.utc).isoformat(),
-        "market_status": market_status(),
+        "market_status": current_market_status,
         "portfolio": portfolio,
         "market_news": _sort_news(market_news)[:8],
         "hot_news": hot_news,

@@ -133,7 +133,36 @@ def market_status(at: datetime | None = None) -> dict[str, Any]:
             "datetime_ist": moment.isoformat(),
         }
 
-    holidays = _trading_holidays(moment.year)
+    current_time = moment.time()
+
+    # Outside regular equity-market hours, we already know the market
+    # cannot be open. Avoid hitting NSE unnecessarily.
+    if not (EQUITY_OPEN <= current_time <= EQUITY_CLOSE):
+        return {
+            "exchange": "NSE",
+            "segment": "equity",
+            "open": False,
+            "reason": "outside_regular_session",
+            "regular_session": "09:15-15:30 IST",
+            "datetime_ist": moment.isoformat(),
+            "status_verified": True,
+        }
+
+    # During regular hours we need the holiday calendar to distinguish
+    # a normal trading session from an NSE holiday.
+    try:
+        holidays = _trading_holidays(moment.year)
+    except requests.RequestException:
+        return {
+            "exchange": "NSE",
+            "segment": "equity",
+            "open": None,
+            "reason": "status_unavailable",
+            "regular_session": "09:15-15:30 IST",
+            "datetime_ist": moment.isoformat(),
+            "status_verified": False,
+        }
+
     holiday = holidays.get(date_key)
 
     if holiday:
@@ -141,8 +170,6 @@ def market_status(at: datetime | None = None) -> dict[str, Any]:
             holiday.get("description") or "NSE trading holiday"
         )
 
-        # NSE marks some dates as special-session dates, such as
-        # Diwali Laxmi Pujan / Muhurat Trading.
         is_special_session = "*" in description
 
         return {
@@ -157,21 +184,15 @@ def market_status(at: datetime | None = None) -> dict[str, Any]:
             "holiday": description.rstrip("*").strip(),
             "special_session": is_special_session,
             "datetime_ist": moment.isoformat(),
+            "status_verified": True,
         }
-
-    current_time = moment.time()
-
-    is_open = EQUITY_OPEN <= current_time <= EQUITY_CLOSE
 
     return {
         "exchange": "NSE",
         "segment": "equity",
-        "open": is_open,
-        "reason": (
-            "regular_session"
-            if is_open
-            else "outside_regular_session"
-        ),
+        "open": True,
+        "reason": "regular_session",
         "regular_session": "09:15-15:30 IST",
         "datetime_ist": moment.isoformat(),
+        "status_verified": True,
     }
