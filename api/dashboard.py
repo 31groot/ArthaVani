@@ -11,8 +11,7 @@ from api.security import get_current_user
 from config.logger import logger
 from finance_agent.providers.market import market_status
 from finance_agent.providers.yahoo import YahooProvider
-from finance_agent.tools import get_portfolio_summary
-
+from finance_agent.tools import get_portfolio_summary_for_user
 
 def _sort_news(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
     def key(item: dict[str, Any]) -> str:
@@ -22,7 +21,10 @@ def _sort_news(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 
 async def build_dashboard(user_id: str) -> dict[str, Any]:
-    portfolio = await get_portfolio_summary.ainvoke({})
+    portfolio = await asyncio.to_thread(
+        get_portfolio_summary_for_user,
+        user_id,
+    )
         
 
     yahoo = YahooProvider()

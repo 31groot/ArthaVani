@@ -410,13 +410,16 @@ def _portfolio_snapshot(user_id: str) -> dict[str, Any]:
         "market_data_error": market_data_error,
     }
 
+def get_portfolio_summary_for_user(user_id: str) -> dict[str, Any]:
+    """Get a user's Groww holdings and portfolio valuation."""
+    return _portfolio_snapshot(user_id)
 
 @tool
 def get_portfolio_summary(
     user_id: Annotated[str, InjectedState("user_id")]
 ) -> dict[str, Any]:
     """Get the user's Groww holdings and portfolio valuation."""
-    return _portfolio_snapshot(user_id)
+    return get_portfolio_summary_for_user(user_id)
 
 @tool
 def get_portfolio_risk(
