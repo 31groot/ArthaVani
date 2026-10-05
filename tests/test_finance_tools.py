@@ -1,8 +1,11 @@
-
 import tempfile
 import unittest
+from datetime import datetime
 from pathlib import Path
 from unittest.mock import patch
+from zoneinfo import ZoneInfo
+
+import requests
 
 from finance_agent.providers.watchlist import WatchlistStore
 from finance_agent.providers.market import market_status
@@ -28,15 +31,45 @@ class FinanceToolSupportTests(unittest.TestCase):
             self.assertEqual(store.list_for_user("alice"), [])
 
     def test_market_status_has_expected_shape(self) -> None:
+        market_time = datetime(
+            2026,
+            10,
+            6,
+            10,
+            0,
+            tzinfo=ZoneInfo("Asia/Kolkata"),
+        )
+
         with patch(
             "finance_agent.providers.market._trading_holidays",
             return_value={},
         ):
-            result = market_status()
+            result = market_status(at=market_time)
 
         self.assertIn("exchange", result)
         self.assertIn("segment", result)
         self.assertIn("open", result)
+
+    def test_market_status_handles_nse_failure(self) -> None:
+        market_time = datetime(
+            2026,
+            10,
+            6,
+            10,
+            0,
+            tzinfo=ZoneInfo("Asia/Kolkata"),
+        )
+
+        with patch(
+            "finance_agent.providers.market._trading_holidays",
+            side_effect=requests.RequestException("NSE unavailable"),
+        ):
+            result = market_status(at=market_time)
+
+        self.assertIn("open", result)
+        self.assertIsNone(result["open"])
+        self.assertEqual(result["reason"], "status_unavailable")
+        self.assertFalse(result["status_verified"])
 
 if __name__ == "__main__":
     unittest.main()
