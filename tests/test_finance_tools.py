@@ -7,8 +7,9 @@ from zoneinfo import ZoneInfo
 
 import requests
 
-from finance_agent.providers.watchlist import WatchlistStore
 from finance_agent.providers.market import market_status
+from finance_agent.providers.watchlist import WatchlistStore
+
 
 class FinanceToolSupportTests(unittest.TestCase):
     def test_watchlist_store_add_list_remove(self) -> None:
@@ -70,6 +71,7 @@ class FinanceToolSupportTests(unittest.TestCase):
         self.assertIsNone(result["open"])
         self.assertEqual(result["reason"], "status_unavailable")
         self.assertFalse(result["status_verified"])
+
 
 if __name__ == "__main__":
     unittest.main()
