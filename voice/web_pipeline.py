@@ -141,9 +141,20 @@ class BrowserVoicePipeline:
             and self._tts_barge_in_armed
             and not self._barge_in_in_progress
             and time.monotonic() >= self._tts_interrupt_ready_at
-            and float(getattr(event, "confidence", 0.0) or 0.0) >= 0.72
             and len(text) >= 3
         ):
+            # Deepgram interim confidence is not consistently populated
+            # across deployments/models.  The presence of a substantive
+            # interim hypothesis while TTS is active is already a strong
+            # interruption signal because the browser capture path uses
+            # echoCancellation=true.  Do not wait for a final transcript or
+            # a high confidence score before cutting the current response.
+            confidence = float(getattr(event, "confidence", 0.0) or 0.0)
+            logger.info(
+                "Browser barge-in candidate from Deepgram interim: text=%r confidence=%.3f",
+                text,
+                confidence,
+            )
             await self._queue_event({"type": "duck", "level": DROPPED_VOL})
             await self._confirm_barge_in("Deepgram interim transcript")
 

@@ -24,6 +24,9 @@ function AssistantCard() {
   const playbackGainRef = useRef(null);
   const playbackSourcesRef = useRef(new Set());
   const playbackEndTimeRef = useRef(0);
+  const ttsActiveRef = useRef(false);
+  const bargeInRef = useRef(false);
+  const voiceAssistantMessageIdRef = useRef(null);
 
   useEffect(() => {
     setVoiceSupported(
@@ -124,7 +127,7 @@ function AssistantCard() {
       await stopListening();
     }
 
-    setMessages((items) => [...items, { role: "user", content: value }]);
+    setMessages((items) => [...items, { id: `chat-user-${Date.now()}-${Math.random().toString(36).slice(2)}`, role: "user", content: value }]);
     setInput("");
     setWorking(true);
     setVoiceError("");
@@ -133,12 +136,13 @@ function AssistantCard() {
       const result = await chat(value);
       setMessages((items) => [
         ...items,
-        { role: "assistant", content: result.message },
+        { id: `chat-assistant-${Date.now()}-${Math.random().toString(36).slice(2)}`, role: "assistant", content: result.message },
       ]);
     } catch (err) {
       setMessages((items) => [
         ...items,
         {
+          id: `chat-error-${Date.now()}-${Math.random().toString(36).slice(2)}`,
           role: "assistant",
           content: err.message || "I couldn't complete that request.",
         },
@@ -176,6 +180,9 @@ function AssistantCard() {
 
     setVoiceError("");
     setTtsActive(false);
+    ttsActiveRef.current = false;
+    bargeInRef.current = false;
+    voiceAssistantMessageIdRef.current = null;
     let stream;
     let audioContext;
     let socket;
@@ -249,8 +256,20 @@ function AssistantCard() {
         if (message.type === "barge_in") {
           // Hard-cut the existing assistant audio immediately. The backend
           // emits this before waiting for LLM/TTS cancellation.
+          bargeInRef.current = true;
+          ttsActiveRef.current = false;
           setPlaybackVolume(0.0, 0.01);
           stopPlayback();
+
+          // If the assistant transcript has already reached the UI for the
+          // interrupted response, remove only that response. The next user
+          // turn will be rendered normally once STT finalizes it.
+          const staleAssistantId = voiceAssistantMessageIdRef.current;
+          if (staleAssistantId) {
+            setMessages((items) => items.filter((item) => item.id !== staleAssistantId));
+            voiceAssistantMessageIdRef.current = null;
+          }
+
           setTtsActive(false);
           setWorking(true);
           return;
@@ -262,6 +281,7 @@ function AssistantCard() {
         if (message.type === "user_text") {
           const text = message.text?.trim();
           if (!text) return;
+          bargeInRef.current = false;
           setMessages((items) => [...items, { role: "user", content: text }]);
           setInput("");
           setWorking(true);
@@ -269,13 +289,19 @@ function AssistantCard() {
         }
         if (message.type === "assistant_text") {
           const text = message.text?.trim();
-          if (!text) return;
-          setMessages((items) => [...items, { role: "assistant", content: text }]);
+          if (!text || bargeInRef.current) return;
+          const id = `voice-assistant-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+          voiceAssistantMessageIdRef.current = id;
+          setMessages((items) => [...items, { id, role: "assistant", content: text }]);
           setWorking(false);
           return;
         }
         if (message.type === "tts_started") {
+          // Do not resurrect audio volume for a response that has already
+          // been interrupted.
+          if (bargeInRef.current) return;
           setPlaybackVolume(1.0, 0.03);
+          ttsActiveRef.current = true;
           setTtsActive(true);
           return;
         }
@@ -286,6 +312,8 @@ function AssistantCard() {
           return;
         }
         if (message.type === "tts_finished") {
+          ttsActiveRef.current = false;
+          setTtsActive(false);
           setPlaybackVolume(1.0, 0.03);
           return;
         }
