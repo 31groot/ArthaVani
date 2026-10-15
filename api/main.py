@@ -131,26 +131,56 @@ async def health() -> dict[str, str]:
     response_model=RegisterResponse,
     status_code=status.HTTP_201_CREATED,
 )
-async def register(payload: RegisterRequest, request: Request) -> RegisterResponse:
+async def register(
+    payload: RegisterRequest,
+    request: Request,
+) -> RegisterResponse:
+    request_started = time.perf_counter()
+
     email = payload.email.lower().strip()
     limiter_key = f"{client_ip(request)}:{email}"
+
     register_limiter.check(limiter_key)
 
-    if await asyncio.to_thread(get_user_by_email, email) is not None:
+    # 1. Measure the email lookup.
+    stage_started = time.perf_counter()
+
+    existing_user = await asyncio.to_thread(
+        get_user_by_email,
+        email,
+    )
+
+    logger.info(
+        "Registration stage=email_lookup duration_ms=%.1f",
+        (time.perf_counter() - stage_started) * 1000,
+    )
+
+    if existing_user is not None:
         register_limiter.record_failure(limiter_key)
+
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="An account with this email already exists.",
         )
 
     user_id = str(uuid.uuid4())
+
     try:
-        # Argon2 hashing is CPU-intensive; run it in a worker thread so it
-        # does not block the FastAPI event loop while other requests arrive.
+        # 2. Measure password hashing.
+        stage_started = time.perf_counter()
+
         password_hash_value = await asyncio.to_thread(
             hash_password,
             payload.password.get_secret_value(),
         )
+
+        logger.info(
+            "Registration stage=password_hash duration_ms=%.1f",
+            (time.perf_counter() - stage_started) * 1000,
+        )
+
+        # 3. Measure database insertion.
+        stage_started = time.perf_counter()
 
         user = await asyncio.to_thread(
             create_user,
@@ -158,25 +188,47 @@ async def register(payload: RegisterRequest, request: Request) -> RegisterRespon
             email=email,
             password_hash=password_hash_value,
         )
+
+        logger.info(
+            "Registration stage=create_user duration_ms=%.1f",
+            (time.perf_counter() - stage_started) * 1000,
+        )
+
     except Exception as exc:
         logger.exception("Failed to create user.")
         register_limiter.record_failure(limiter_key)
+
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Could not create the account.",
         ) from exc
 
     register_limiter.record_success(limiter_key)
+
+    # 4. Measure token generation.
+    stage_started = time.perf_counter()
+
+    access_token = create_access_token(user["id"])
+
+    logger.info(
+        "Registration stage=create_token duration_ms=%.1f",
+        (time.perf_counter() - stage_started) * 1000,
+    )
+
+    logger.info(
+        "Registration stage=total duration_ms=%.1f",
+        (time.perf_counter() - request_started) * 1000,
+    )
+
     return RegisterResponse(
         user=UserResponse(
             id=user["id"],
             email=user["email"],
             created_at=user["created_at"],
         ),
-        access_token=create_access_token(user["id"]),
+        access_token=access_token,
         token_type="bearer",
     )
-
 
 @app.post("/api/v1/auth/token", response_model=TokenResponse)
 async def login(
