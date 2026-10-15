@@ -9,6 +9,7 @@ import uuid
 from contextlib import asynccontextmanager
 from typing import Annotated
 
+from psycopg.errors import UniqueViolation
 from fastapi import Depends, FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordRequestForm
