@@ -20,6 +20,7 @@ from api.schemas import (
     GrowwConnectRequest,
     GrowwConnectionResponse,
     RegisterRequest,
+    RegisterResponse,
     TokenResponse,
     UserResponse,
 )
@@ -113,6 +114,7 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    max_age=3600,
 )
 
 
@@ -126,10 +128,10 @@ async def health() -> dict[str, str]:
 
 @app.post(
     "/api/v1/auth/register",
-    response_model=UserResponse,
+    response_model=RegisterResponse,
     status_code=status.HTTP_201_CREATED,
 )
-async def register(payload: RegisterRequest, request: Request) -> UserResponse:
+async def register(payload: RegisterRequest, request: Request) -> RegisterResponse:
     email = payload.email.lower().strip()
     limiter_key = f"{client_ip(request)}:{email}"
     register_limiter.check(limiter_key)
@@ -143,11 +145,18 @@ async def register(payload: RegisterRequest, request: Request) -> UserResponse:
 
     user_id = str(uuid.uuid4())
     try:
+        # Argon2 hashing is CPU-intensive; run it in a worker thread so it
+        # does not block the FastAPI event loop while other requests arrive.
+        password_hash_value = await asyncio.to_thread(
+            hash_password,
+            payload.password.get_secret_value(),
+        )
+
         user = await asyncio.to_thread(
             create_user,
             user_id=user_id,
             email=email,
-            password_hash=hash_password(payload.password.get_secret_value()),
+            password_hash=password_hash_value,
         )
     except Exception as exc:
         logger.exception("Failed to create user.")
@@ -158,10 +167,14 @@ async def register(payload: RegisterRequest, request: Request) -> UserResponse:
         ) from exc
 
     register_limiter.record_success(limiter_key)
-    return UserResponse(
-        id=user["id"],
-        email=user["email"],
-        created_at=user["created_at"],
+    return RegisterResponse(
+        user=UserResponse(
+            id=user["id"],
+            email=user["email"],
+            created_at=user["created_at"],
+        ),
+        access_token=create_access_token(user["id"]),
+        token_type="bearer",
     )
 
 

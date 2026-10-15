@@ -18,6 +18,14 @@ class UserResponse(BaseModel):
     created_at: datetime
 
 
+class RegisterResponse(BaseModel):
+    """Successful registration response with an immediately usable token."""
+
+    user: UserResponse
+    access_token: str
+    token_type: Literal["bearer"]
+
+
 class TokenResponse(BaseModel):
     access_token: str
     token_type: Literal["bearer"]

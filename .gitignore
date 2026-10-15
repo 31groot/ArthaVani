@@ -14,3 +14,6 @@ third_party/kite-mcp-server/
 # Local runtime data
 data/
 frontend/node_modules/
+
+# Generated frontend build output
+frontend/dist/
