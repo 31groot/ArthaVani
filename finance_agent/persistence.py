@@ -41,26 +41,21 @@ def _require_database_url() -> str:
 
 _pool: ConnectionPool | None = None
 
-
 def _get_pool() -> ConnectionPool:
-    """Lazily create the shared connection pool.
-
-    A module-level pool means every call below reuses a small set of
-    already-open connections instead of opening (and TLS-handshaking) a
-    brand new `psycopg.connect()` on every single query.
-    """
+    """Lazily create the shared connection pool."""
     global _pool
     if _pool is None:
         pool = ConnectionPool(
             conninfo=_require_database_url(),
-            min_size=1,
+            min_size=3,  # Keep 3 warm connections ready for concurrent Promise.all() calls
             max_size=10,
+            max_idle=300,  # Keep connections warm for 5 minutes
+            kwargs={"prepare_threshold": None},  # Prevents prepared-statement errors/overhead on poolers
             open=False,
         )
-        pool.open()
+        pool.open(wait=True)  # Warm up connections at startup, not during the first user login!
         _pool = pool
     return _pool
-
 
 def close_pool() -> None:
     """Close the shared pool. Intended for use on application shutdown."""

@@ -176,10 +176,16 @@ async def login(
 
     user = await asyncio.to_thread(get_user_by_email, email)
 
-    if user is None or not verify_password(
-        form.password,
-        user["password_hash"],
-    ):
+
+    is_valid = (
+        user is not None
+        and await asyncio.to_thread(
+            verify_password,
+            form.password,
+            user["password_hash"],
+        )
+    )
+    if not is_valid:
         login_limiter.record_failure(limiter_key)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

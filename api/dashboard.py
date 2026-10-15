@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import time
 from datetime import datetime, timezone
 from typing import Any
 
@@ -13,33 +14,56 @@ from finance_agent.providers.market import market_status
 from finance_agent.providers.yahoo import YahooProvider
 from finance_agent.tools import get_portfolio_summary_for_user
 
-def _sort_news(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    def key(item: dict[str, Any]) -> str:
-        return str(item.get("published") or "")
+_yahoo = YahooProvider()
+_market_cache: dict[str, tuple[float, Any]] = {}
+CACHE_TTL = 60.0  # seconds
 
-    return sorted(items, key=key, reverse=True)
+
+def _sort_news(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return sorted(items, key=lambda item: str(item.get("published") or ""), reverse=True)
+
+
+async def _get_cached_market_news() -> list[dict[str, Any]]:
+    now = time.monotonic()
+    cached = _market_cache.get("market_news")
+    if cached and (now - cached[0]) < CACHE_TTL:
+        return cached[1]
+    try:
+        data = await asyncio.to_thread(_yahoo.news, "^NSEI", 8)
+        _market_cache["market_news"] = (now, data)
+        return data
+    except Exception:
+        logger.exception("Market-news fetch failed.")
+        return cached[1] if cached else []
+
+
+async def _get_cached_market_status() -> dict[str, Any]:
+    now = time.monotonic()
+    cached = _market_cache.get("market_status")
+    if cached and (now - cached[0]) < CACHE_TTL:
+        return cached[1]
+    try:
+        data = await asyncio.to_thread(market_status)
+        _market_cache["market_status"] = (now, data)
+        return data
+    except Exception:
+        logger.exception("Market-status fetch failed.")
+        return {
+            "exchange": "NSE",
+            "segment": "equity",
+            "open": None,
+            "reason": "status_unavailable",
+            "status_verified": False,
+        }
 
 
 async def build_dashboard(user_id: str) -> dict[str, Any]:
-    portfolio = await asyncio.to_thread(
-        get_portfolio_summary_for_user,
-        user_id,
+    # Run Portfolio, Market News, and Market Status IN PARALLEL
+    portfolio, market_news, current_market_status = await asyncio.gather(
+        asyncio.to_thread(get_portfolio_summary_for_user, user_id),
+        _get_cached_market_news(),
+        _get_cached_market_status(),
     )
-        
-
-    yahoo = YahooProvider()
-
-    market_news: list[dict[str, Any]] = []
-    hot_news: list[dict[str, Any]] = []
-
-    try:
-        market_news = await asyncio.to_thread(
-            yahoo.news,
-            "^NSEI",
-            8,
-        )
-    except Exception:
-        logger.exception("Market-news fetch failed.")
 
     holding_symbols = [
         str(row.get("trading_symbol") or "").strip().upper()
@@ -47,14 +71,18 @@ async def build_dashboard(user_id: str) -> dict[str, Any]:
         if row.get("trading_symbol")
     ]
 
-    # Keep the dashboard responsive: fetch recent news for only the first
-    # five holdings and cap each ticker to a few headlines.
     async def fetch_holding_news(symbol: str) -> list[dict[str, Any]]:
+        cache_key = f"news:{symbol}"
+        now = time.monotonic()
+        cached = _market_cache.get(cache_key)
+        if cached and (now - cached[0]) < 300.0:  # 5-min cache for ticker news
+            return cached[1]
         try:
             ticker = symbol if "." in symbol else f"{symbol}.NS"
-            rows = await asyncio.to_thread(yahoo.news, ticker, 4)
+            rows = await asyncio.to_thread(_yahoo.news, ticker, 4)
             for row in rows:
                 row["ticker"] = symbol
+            _market_cache[cache_key] = (now, rows)
             return rows
         except Exception:
             logger.exception("Holding news fetch failed for %s.", symbol)
@@ -66,7 +94,6 @@ async def build_dashboard(user_id: str) -> dict[str, Any]:
 
     seen: set[str] = set()
     merged: list[dict[str, Any]] = []
-
     for batch in batches:
         for item in batch:
             title = str(item.get("title") or "").strip()
@@ -76,28 +103,9 @@ async def build_dashboard(user_id: str) -> dict[str, Any]:
             merged.append(item)
 
     hot_news = _sort_news(merged)[:8]
-
-    # If Groww is unavailable or there are no holding-specific headlines,
-    # keep the dashboard useful by falling back to general market headlines.
     if not hot_news:
-        hot_news = [
-            {**item, "ticker": None}
-            for item in _sort_news(market_news)[:8]
-        ]
+        hot_news = [{**item, "ticker": None} for item in _sort_news(market_news)[:8]]
 
-    try:
-        current_market_status = await asyncio.to_thread(
-            market_status,
-        )
-    except Exception:
-        logger.exception("Market-status fetch failed.")
-        current_market_status = {
-            "exchange": "NSE",
-            "segment": "equity",
-            "open": None,
-            "reason": "status_unavailable",
-            "status_verified": False,
-        }
     return {
         "updated_at": datetime.now(timezone.utc).isoformat(),
         "market_status": current_market_status,

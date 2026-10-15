@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import time
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
@@ -10,12 +11,46 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from jwt.exceptions import InvalidTokenError
 from pwdlib import PasswordHash
+from pwdlib.hashers.argon2 import Argon2Hasher
 
 from config.settings import settings
 from finance_agent.persistence import get_user_by_id
 
-password_hash = PasswordHash.recommended()
+# Tuned to OWASP Argon2id parameters (19 MiB memory, 2 iterations, 1 thread)
+# so password hashing/verification runs in ~100ms on Render's shared vCPU
+# instead of stalling for 1+ seconds, while still verifying existing hashes.
+password_hash = PasswordHash(
+    (
+        Argon2Hasher(
+            time_cost=2,
+            memory_cost=19456,
+            parallelism=1,
+        ),
+    )
+)
+
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/token")
+
+# Short-lived in-memory cache so burst requests after login (/auth/me,
+# /integrations/groww, /dashboard, /voice) do not hit Postgres 4 times
+# for the exact same user row within a few hundred milliseconds.
+_USER_CACHE_TTL_SECONDS = 30.0
+_user_cache: dict[str, tuple[float, dict[str, Any]]] = {}
+
+
+def _get_cached_user(user_id: str) -> dict[str, Any] | None:
+    entry = _user_cache.get(user_id)
+    if entry is None:
+        return None
+    cached_at, user = entry
+    if (time.monotonic() - cached_at) >= _USER_CACHE_TTL_SECONDS:
+        _user_cache.pop(user_id, None)
+        return None
+    return user
+
+
+def _set_cached_user(user_id: str, user: dict[str, Any]) -> None:
+    _user_cache[user_id] = (time.monotonic(), user)
 
 
 def hash_password(password: str) -> str:
@@ -30,13 +65,12 @@ def create_access_token(user_id: str) -> str:
     if not settings.API_JWT_SECRET_KEY:
         raise RuntimeError("API_JWT_SECRET_KEY is not configured.")
 
-    expires_at = datetime.now(timezone.utc) + timedelta(
-        minutes=settings.API_JWT_EXPIRE_MINUTES
-    )
+    now = datetime.now(timezone.utc)
+    expires_at = now + timedelta(minutes=settings.API_JWT_EXPIRE_MINUTES)
     payload = {
         "sub": user_id,
         "exp": expires_at,
-        "iat": datetime.now(timezone.utc),
+        "iat": now,
     }
     return jwt.encode(
         payload,
@@ -75,12 +109,16 @@ def _decode_user_id(token: str) -> str:
 def get_user_from_access_token(token: str) -> dict[str, Any]:
     """Resolve a bearer token for non-HTTP transports such as WebSocket.
 
-    This performs a blocking database lookup; callers running inside an
-    asyncio event loop (the WebSocket handler, `get_current_user`) should
-    use `aget_user_from_access_token` instead so the lookup doesn't block
-    the loop.
+    This performs a blocking database lookup on cache miss; callers running
+    inside an asyncio event loop (the WebSocket handler, `get_current_user`)
+    should use `aget_user_from_access_token` instead so the lookup doesn't
+    block the loop.
     """
     user_id = _decode_user_id(token)
+    cached_user = _get_cached_user(user_id)
+    if cached_user is not None:
+        return cached_user
+
     user = get_user_by_id(user_id)
     if user is None:
         raise HTTPException(
@@ -88,12 +126,17 @@ def get_user_from_access_token(token: str) -> dict[str, Any]:
             detail="User no longer exists.",
             headers={"WWW-Authenticate": "Bearer"},
         )
+    _set_cached_user(user_id, user)
     return user
 
 
 async def aget_user_from_access_token(token: str) -> dict[str, Any]:
     """Async, non-blocking variant of `get_user_from_access_token`."""
     user_id = _decode_user_id(token)
+    cached_user = _get_cached_user(user_id)
+    if cached_user is not None:
+        return cached_user
+
     user = await asyncio.to_thread(get_user_by_id, user_id)
     if user is None:
         raise HTTPException(
@@ -101,6 +144,7 @@ async def aget_user_from_access_token(token: str) -> dict[str, Any]:
             detail="User no longer exists.",
             headers={"WWW-Authenticate": "Bearer"},
         )
+    _set_cached_user(user_id, user)
     return user
 
 
