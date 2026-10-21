@@ -229,7 +229,7 @@ Used for durable/shared application state and LangGraph conversation checkpoints
 
 The watchlist intentionally remains SQLite because it is a tiny, simple per-user dataset.
 
-For multi-instance production deployments, use persistent/shared storage or move the watchlist to PostgreSQL.
+For multi-instance production deployments, move the watchlist to PostgreSQL.
 
 ### Security
 
