@@ -43,7 +43,7 @@ def _forex() -> ForexProvider:
 
 @lru_cache(maxsize=1)
 def _watchlist() -> WatchlistStore:
-    return WatchlistStore(settings.WATCHLIST_DB_PATH)
+    return WatchlistStore()
 
 
 def _yahoo_equity_symbol(exchange: str, trading_symbol: str) -> str:

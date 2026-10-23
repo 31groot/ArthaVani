@@ -22,8 +22,6 @@ class Settings(BaseSettings):
     EDGE_TTS_VOICE: str = "en-GB-SoniaNeural"
     LOG_LEVEL: str = "info"
 
-    WATCHLIST_DB_PATH: str = "data/watchlist.db"
-
     DATABASE_URL: str | None = None
 
 

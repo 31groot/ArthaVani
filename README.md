@@ -32,7 +32,7 @@ Is the NSE market open right now?
 - Am I overly dependent on one company, sector or theme?
 - Are my prices live, delayed or fallback values?
 
-# Architecture
+## Architecture
 
 ```text
 React / Vite
@@ -52,12 +52,12 @@ React / Vite
         │                  │                  │
         └──────────────────┼──────────────────┘
                            ▼
-                  PostgreSQL / SQLite
+                  PostgreSQL
 ```
 
 Text and voice use the same finance-agent core.
 
-# Voice pipeline
+## Voice pipeline
 
 ```text
 Microphone
@@ -89,7 +89,7 @@ WebSocket / local audio queues
       browser / speaker
 ```
 
-## Audio format and buffering
+### Audio format and buffering
 
 After the capture boundary, the application uses one common format:
 
@@ -116,7 +116,7 @@ The browser worklet converts browser audio to 16 kHz int16 PCM and sends about *
 
 Bounded `asyncio.Queue`s connect the stages so temporary downstream slowdowns do not create unbounded memory growth.
 
-## VAD and interruption
+### VAD and interruption
 
 Silero VAD consumes exact 512-sample frames. A small state machine turns frame probabilities into speech-start and speech-end events.
 
@@ -136,7 +136,7 @@ process the new user turn
 
 The browser also uses interim STT information to make barge-in responsive.
 
-## Streaming TTS
+### Streaming TTS
 
 The LLM is streamed instead of waiting for the full response:
 
@@ -146,7 +146,7 @@ LLM chunks → sentence splitter → Edge TTS → audio chunks
 
 This lets the first sentence start playing while later sentences are still being generated.
 
-# LangGraph agent
+## LangGraph agent
 
 ```text
 User message
@@ -180,10 +180,12 @@ ambiguous → broader fallback set
 ## Finance tools
 
 **Portfolio**
+
 - Summary
 - Risk / concentration
 
 **Market research**
+
 - Quote
 - Fundamentals
 - History
@@ -193,10 +195,11 @@ ambiguous → broader fallback set
 - Earnings calendar
 
 **Other**
+
 - AMFI NAV
 - Currency conversion
 - NSE market status
-- SQLite watchlist
+- PostgreSQL watchlist
 
 ## User-scoped execution
 
@@ -214,22 +217,17 @@ InjectedState("user_id")
 user-scoped Groww / watchlist access
 ```
 
-# Data, storage and security
+## Data, storage and security
 
 ### PostgreSQL
 
-Used for durable/shared application state and LangGraph conversation checkpoints:
+Used for durable/shared application state, per-user watchlists, and LangGraph conversation checkpoints:
 
 - users
 - Groww connection metadata
 - encrypted Groww credentials
+- per-user watchlists
 - conversation checkpoints
-
-### SQLite
-
-The watchlist intentionally remains SQLite because it is a tiny, simple per-user dataset.
-
-For multi-instance production deployments, move the watchlist to PostgreSQL.
 
 ### Security
 
@@ -239,7 +237,7 @@ For multi-instance production deployments, move the watchlist to PostgreSQL.
 - user-scoped portfolio/watchlist access
 - authenticated voice WebSocket
 
-# Repository layout
+## Repository layout
 
 ```text
 ArthaVani/
@@ -289,7 +287,7 @@ ArthaVani/
 └── run_voice.py             # Local voice entrypoint
 ```
 
-# Tech stack
+## Tech stack
 
 | Layer | Technologies |
 |---|---|
@@ -299,22 +297,20 @@ ArthaVani/
 | Agent | LangGraph, LangChain Core, Groq |
 | Voice | Deepgram, Silero VAD, Edge TTS, PyAV, SciPy, SoundDevice |
 | Finance | Groww, Yahoo Finance, AMFI, FX provider, NSE logic |
-| Storage | PostgreSQL, SQLite |
+| Storage | PostgreSQL |
 | DevOps | Docker Compose, GitHub Actions, Render |
 
-# API surface
+## API surface
 
 ```text
 GET    /health
 POST   /api/v1/auth/register
 POST   /api/v1/auth/token
 GET    /api/v1/auth/me
-
 GET    /api/v1/integrations/groww
 POST   /api/v1/integrations/groww/connect
 PUT    /api/v1/integrations/groww
 DELETE /api/v1/integrations/groww
-
 GET    /api/v1/portfolio/summary
 GET    /api/v1/dashboard
 POST   /api/v1/chat
@@ -327,7 +323,7 @@ FastAPI docs locally:
 http://127.0.0.1:8000/docs
 ```
 
-# Requirements
+## Requirements
 
 - Python 3.11
 - Node.js 22+
@@ -336,7 +332,7 @@ http://127.0.0.1:8000/docs
 - Browser with microphone + AudioWorklet support for browser voice
 - API credentials for the providers you use
 
-## Environment
+### Environment
 
 ```bash
 cp .env.example .env
@@ -365,20 +361,19 @@ python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().d
 
 Never commit real secrets.
 
-# Getting started
+## Getting started
 
-## 1. Clone and install
+### 1. Clone and install
 
 ```bash
 git clone https://github.com/31groot/ArthaVani.git
 cd ArthaVani
-
 python3.11 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements-dev.txt
 ```
 
-## 2. Start PostgreSQL
+### 2. Start PostgreSQL
 
 ```bash
 docker compose up -d postgres
@@ -391,7 +386,7 @@ Default local connection:
 postgresql://arthavani:arthavani@localhost:5432/arthavani
 ```
 
-## 3. Configure the backend
+### 3. Configure the backend
 
 ```bash
 cp .env.example .env
@@ -399,7 +394,7 @@ cp .env.example .env
 
 Set the required API keys and database/security settings.
 
-## 4. Start the backend
+### 4. Start the backend
 
 ```bash
 uvicorn api.main:app --reload --host 127.0.0.1 --port 8000
@@ -411,7 +406,7 @@ Check it:
 curl http://127.0.0.1:8000/health
 ```
 
-## 5. Start the frontend
+### 5. Start the frontend
 
 ```bash
 cd frontend
@@ -435,24 +430,19 @@ VITE_VOICE_WS_URL=ws://127.0.0.1:8000
 
 Production uses `https://` + `wss://`.
 
-# Useful development commands
+## Useful development commands
 
 ```bash
 # PostgreSQL
 docker compose up -d postgres
-
 # Backend
 uvicorn api.main:app --reload --host 127.0.0.1 --port 8000
-
 # Tests
 pytest -q
-
 # Python compile check
 python -m compileall api config finance_agent voice tests
-
 # Dependency check
 pip check
-
 # Git hygiene
 git diff --check
 ```
@@ -472,15 +462,27 @@ Local native voice:
 python run_voice.py
 ```
 
-# Testing
+## Testing
 
-Run everything:
+Run the regular unit tests:
+
+```bash
+pytest -m "not postgres"
+```
+
+Run PostgreSQL integration tests against a dedicated test database:
+
+```bash
+pytest -m postgres
+```
+
+Run the complete suite (including PostgreSQL-marked tests) when `DATABASE_URL` points to the test database:
 
 ```bash
 pytest -q
 ```
 
-The current development baseline is **40 passing tests** covering agent behavior, routing, persistence, VAD/STT, text splitting and provider logic.
+The suite covers agent behavior and routing, PostgreSQL persistence, VAD/STT, browser echo handling, text splitting, and provider logic. **Do not point integration tests at production.**
 
 Evaluation assets live under:
 
@@ -489,7 +491,7 @@ evaluation/BFCL/
 evaluation/answer_grounding/
 ```
 
-# CI and deployment
+## CI and deployment
 
 GitHub Actions is defined in:
 
@@ -505,7 +507,6 @@ Render uses two services:
 Frontend static service
         ↓
 React/Vite
-
 Backend web service
         ↓
 FastAPI + Uvicorn
@@ -522,7 +523,7 @@ VITE_VOICE_WS_URL=wss://<backend-host>
 
 The backend CORS configuration must allow the frontend origin.
 
-# Design priorities
+## Design priorities
 
 ### Realtime where it matters
 
@@ -534,14 +535,26 @@ Small PCM chunks, bounded queues, streaming STT, streamed LLM output, sentence-l
 
 ### Lightweight state
 
-PostgreSQL handles durable/shared state. SQLite remains the intentionally lightweight watchlist store.
+PostgreSQL stores users, Groww connection metadata, encrypted credentials, conversation checkpoints, and per-user watchlists.
 
 ### Grounded finance answers
 
 Tools return data plus source/freshness context where available, and the agent is instructed not to present delayed/fallback data as live.
 
-# Current tradeoffs
+## Current tradeoffs
 
-- SQLite watchlist persistence depends on the deployment filesystem.
+- Watchlist availability depends on PostgreSQL connectivity and the database deployment’s persistence configuration.
 - External finance/voice providers can fail or return delayed data.
 - Voice latency depends on network, browser audio behavior and provider response time.
+
+## Echo handling in browser voice
+
+The assistant's playback can leak into the microphone and be mistaken for a user interruption. The browser pipeline uses several defenses, but none guarantees perfect echo suppression on every browser, device, or room.
+
+1. **Server-side WebRTC acoustic echo cancellation (AEC).** The browser capture worklet sends microphone audio and a playback-reference signal in paired `[mic][reference]` packets. The reference is tapped after the playback/ducking gain so it reflects the signal sent toward the speakers. The backend can pass both streams through the same `EchoCanceller` implementation used by the local pipeline when `BROWSER_SERVER_AEC=true` and the server advertises `server_aec`. The streams share the worklet capture timeline, but physical device and output/input latency still affect acoustic alignment.
+
+2. **Browser AEC.** Microphone capture requests the browser's native `echoCancellation` processing. To compare server-side AEC without browser AEC, set `VITE_BROWSER_AEC=off` and rebuild the frontend. Test both configurations on the target browser and audio device rather than assuming two cancellers are always better.
+
+3. **EchoGuard and transcript checks.** Interim transcripts are compared with recent assistant speech to help identify likely echo and avoid creating false user turns. This is heuristic: a user may repeat the assistant's words, and residual echo may not match the transcript history exactly.
+
+4. **Strict VAD during assistant playback.** Silero uses stricter speech detection and confirmation timing while TTS is active. VAD detects speech-like audio, not who produced it, so a VAD event alone is not proof of a user interruption. The barge-in logic combines VAD and transcript evidence; validate it with real microphone/speaker setups because residual echo can still cause false interruptions.

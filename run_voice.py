@@ -1,15 +1,18 @@
 import asyncio
 
 from config.logger import logger
+from finance_agent.persistence import close_pool, initialize_database
 from voice.pipeline import VoicePipeline
 
 
 async def main() -> None:
-
-    pipeline = VoicePipeline()
+    pipeline = None
 
     try:
+        # Ensure PostgreSQL tables exist before starting the agent.
+        initialize_database()
 
+        pipeline = VoicePipeline()
         await pipeline.start()
 
         logger.info(
@@ -19,12 +22,14 @@ async def main() -> None:
         await asyncio.Event().wait()
 
     finally:
-
-        await pipeline.stop()
+        try:
+            if pipeline is not None:
+                await pipeline.stop()
+        finally:
+            close_pool()
 
 
 if __name__ == "__main__":
-
     try:
         asyncio.run(main())
 

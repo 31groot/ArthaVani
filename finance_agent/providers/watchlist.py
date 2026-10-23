@@ -1,49 +1,14 @@
-"""Persistent, per-user SQLite-backed stock watchlist."""
 
 from __future__ import annotations
 
-import sqlite3
-from datetime import datetime, timezone
-from pathlib import Path
 from typing import Any
+from finance_agent.persistence import db_connection
 
-from config.settings import settings
 from finance_agent.providers.yahoo import YahooProvider
 
 
 class WatchlistStore:
-    """SQLite-backed watchlist scoped to the authenticated user."""
-
-    def __init__(self, path: str) -> None:
-        self.path = Path(path)
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        self._initialize()
-
-    def _connect(self) -> sqlite3.Connection:
-        return sqlite3.connect(self.path)
-
-    def _initialize(self) -> None:
-        with self._connect() as conn:
-            conn.execute(
-                """
-                CREATE TABLE IF NOT EXISTS watchlist (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    owner_id TEXT NOT NULL,
-                    ticker TEXT NOT NULL,
-                    created_at TEXT NOT NULL,
-                    UNIQUE(owner_id, ticker)
-                )
-                """
-            )
-
-            conn.execute(
-                """
-                CREATE INDEX IF NOT EXISTS idx_watchlist_owner
-                ON watchlist(owner_id)
-                """
-            )
-
-            conn.commit()
+    """PostgreSQL-backed watchlist scoped to the authenticated user."""
 
     def add(self, ticker: str, user_id: str) -> dict[str, Any]:
         ticker = ticker.strip().upper()
@@ -51,63 +16,80 @@ class WatchlistStore:
         if not ticker:
             raise ValueError("Ticker cannot be empty.")
 
-        created_at = datetime.now(timezone.utc).isoformat()
+        try:
+            with db_connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        INSERT INTO arthavani_watchlist
+                            (owner_id, ticker)
+                        VALUES (%s, %s)
+                        ON CONFLICT (owner_id, ticker) DO NOTHING
+                        RETURNING id
+                        """,
+                        (user_id, ticker),
+                    )
 
-        with self._connect() as conn:
-            cursor = conn.execute(
-                """
-                INSERT OR IGNORE INTO watchlist
-                    (owner_id, ticker, created_at)
-                VALUES (?, ?, ?)
-                """,
-                (user_id, ticker, created_at),
-            )
-            conn.commit()
+                    row = cur.fetchone()
 
-            if cursor.rowcount == 0:
-                return {
-                    "ticker": ticker,
-                    "added": False,
-                    "message": "Ticker is already in the watchlist.",
-                }
+                conn.commit()
 
+        except Exception:
+            raise
+
+        if row is None:
             return {
-                "id": cursor.lastrowid,
                 "ticker": ticker,
-                "added": True,
+                "added": False,
+                "message": "Ticker is already in the watchlist.",
             }
+
+        return {
+            "id": row[0],
+            "ticker": ticker,
+            "added": True,
+        }
 
     def remove(self, ticker: str, user_id: str) -> bool:
         ticker = ticker.strip().upper()
 
-        with self._connect() as conn:
-            cursor = conn.execute(
-                """
-                DELETE FROM watchlist
-                WHERE ticker = ? AND owner_id = ?
-                """,
-                (ticker, user_id),
-            )
+        with db_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    DELETE FROM arthavani_watchlist
+                    WHERE ticker = %s AND owner_id = %s
+                    """,
+                    (ticker, user_id),
+                )
+
+                removed = cur.rowcount > 0
+
             conn.commit()
 
-            return cursor.rowcount > 0
+        return removed
 
     def list_for_user(self, user_id: str) -> list[dict[str, Any]]:
-        with self._connect() as conn:
-            rows = conn.execute(
-                """
-                SELECT id, ticker, created_at
-                FROM watchlist
-                WHERE owner_id = ?
-                ORDER BY id
-                """,
-                (user_id,),
-            ).fetchall()
+        with db_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT id, ticker, created_at
+                    FROM arthavani_watchlist
+                    WHERE owner_id = %s
+                    ORDER BY id
+                    """,
+                    (user_id,),
+                )
 
-        columns = ["id", "ticker", "created_at"]
+                rows = cur.fetchall()
 
         return [
-            dict(zip(columns, row))
+            {
+                "id": row[0],
+                "ticker": row[1],
+                "created_at": row[2].isoformat(),
+            }
             for row in rows
         ]
 
