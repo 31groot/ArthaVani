@@ -112,6 +112,12 @@ class EchoCanceller:
         # real audio.
         self._playback_active = False
 
+    def set_stream_delay(self, delay_ms: int) -> None:
+        # Update the expected render->capture delay (browser audio reports
+        # its own output/input latency at session start).
+        with self._lock:
+            self._apm.set_system_delay(int(delay_ms))
+
     def set_playback_active(
         self,
         active: bool,
