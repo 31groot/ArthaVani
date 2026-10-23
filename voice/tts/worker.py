@@ -15,6 +15,7 @@ class TTSWorker:
         on_audio_started=None,
         on_audio_finished=None,
         on_error=None,
+        on_sentence=None,
     ):
 
         # EdgeTTS is responsible for converting text into speech
@@ -38,6 +39,7 @@ class TTSWorker:
         self.on_audio_started = on_audio_started
         self.on_audio_finished = on_audio_finished
         self.on_error = on_error
+        self.on_sentence = on_sentence
 
         # Main worker task.
         #
@@ -76,6 +78,9 @@ class TTSWorker:
                     "TTS sentence queued: %r",
                     text,
                 )
+
+                if self.on_sentence is not None:
+                    self.on_sentence(text)
 
                 # Start synthesizing this sentence in a separate task.
                 #

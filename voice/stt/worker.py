@@ -14,6 +14,7 @@ class STTWorker:
         audio_queue: asyncio.Queue[bytes],
         transcript_queue: asyncio.Queue[TranscriptEvent],
         on_transcript=None,
+        should_forward=None,
     ):
 
         # DeepgramClient is responsible for the actual Deepgram
@@ -36,6 +37,10 @@ class STTWorker:
         # Browser voice uses this to render interim words without
         # changing the final transcript flow consumed by the LLM.
         self.on_transcript = on_transcript
+
+        # Optional predicate: return False to drop an event before the LLM
+        # sees it (used to discard the assistant's own echo).
+        self.should_forward = should_forward
 
         # Main worker task.
         #
@@ -94,6 +99,9 @@ class STTWorker:
                 result = self.on_transcript(event)
                 if asyncio.iscoroutine(result):
                     await result
+
+            if self.should_forward is not None and not self.should_forward(event):
+                continue
 
             # Put the event into the queue consumed by LLMWorker.
             #
