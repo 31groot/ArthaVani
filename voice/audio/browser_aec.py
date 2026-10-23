@@ -27,6 +27,22 @@ class BrowserEchoProcessor:
         self._tail_total = SAMPLE_RATE * tail_ms // 1000
         self._tail_left = 0
         self._active = False
+        self._sq = [0.0, 0.0, 0.0]
+        self._n = 0
+
+    def pop_levels(self) -> tuple[float, float, float]:
+        """RMS of (mic in, mic out, reference) since the last call."""
+        n = max(self._n, 1)
+        out = tuple(float((v / n) ** 0.5) for v in self._sq)
+        self._sq = [0.0, 0.0, 0.0]
+        self._n = 0
+        return out
+
+    def _track(self, mic, out, ref) -> None:
+        for i, arr in enumerate((mic, out, ref)):
+            a = np.asarray(arr, dtype=np.float64)
+            self._sq[i] += float(np.mean(a * a)) * len(a) if len(a) else 0.0
+        self._n += len(mic)
 
     def set_delay_ms(self, delay_ms: float | None) -> int:
         value = BROWSER_AEC_DEFAULT_DELAY_MS if delay_ms is None else int(delay_ms)
@@ -65,7 +81,9 @@ class BrowserEchoProcessor:
             out = self._aec.process(mic_np)
             if pad and out.size >= n:
                 out = out[:n]
-            return np.asarray(out, dtype="<i2").tobytes()
+            out = np.asarray(out, dtype="<i2")
+            self._track(mic_np[:n], out[:n], ref_np[:n])
+            return out.tobytes()
         except Exception:
             logger.exception("Browser AEC failed; passing microphone audio through.")
             return mic_np.tobytes()

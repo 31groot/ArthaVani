@@ -130,3 +130,32 @@ def test_echo_interim_never_interrupts():
         return p
     p = asyncio.run(go())
     assert p.confirmed == [] and "interim_text" not in p.events
+
+
+def test_rejected_echo_candidate_does_not_disarm_barge_in():
+    async def go():
+        p = make()
+        p._recent_interims.append((time.monotonic(), "your portfolio is worth", True, 0))
+        await drive(p, [SpeechState.STARTED], wait=0.3)
+        return p
+    p = asyncio.run(go())
+    assert p._user_speech_active is False
+    assert p._tts_barge_in_armed is True
+
+
+def test_started_during_tts_does_not_mark_user_speech_before_verification():
+    async def go():
+        p = make()
+        await drive(p, [SpeechState.STARTED])
+        return p
+    assert asyncio.run(go())._user_speech_active is False
+
+
+def test_user_speech_over_continuing_echo_still_counts():
+    p = make()
+    t = time.monotonic()
+    p._recent_interims.extend([
+        (t, "stop show me infosys news", False, 4),
+        (t + 0.1, "your portfolio is worth", True, 0),
+    ])
+    assert p._interim_evidence(t - 0.1) == "user"

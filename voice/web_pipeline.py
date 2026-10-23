@@ -149,6 +149,7 @@ class BrowserVoicePipeline:
         self._browser_aec = None
         self._audio_mode = "mic"
         self._bad_packet_logged = False
+        self._aec_log_at = 0.0
 
     # ------------------------------------------------------------------
     # Echo helpers
@@ -165,14 +166,17 @@ class BrowserVoicePipeline:
     def _interim_evidence(self, since: float) -> str:
         """What recent STT says about a VAD candidate: 'echo', 'user' or
         'unknown' (no interim yet). The latest interim decides."""
-        latest = None
-        for item in self._recent_interims:
-            if item[0] >= since:
-                latest = item
-        if latest is None:
+        window = [i for i in self._recent_interims if i[0] >= since]
+        if not window:
             return "unknown"
-        _, _, is_echo, novel = latest
-        return "echo" if is_echo or novel == 0 else "user"
+        _, _, is_echo, novel = window[-1]
+        if not is_echo and novel > 0:
+            return "user"
+        # Echo keeps flowing while the user talks over it, so one clearly
+        # non-echo hypothesis in the window outweighs later echo-only ones.
+        if any(not e and n >= INTERIM_STRONG_NOVEL_WORDS for _, _, e, n in window):
+            return "user"
+        return "echo"
 
     async def _duck(self) -> None:
         if not self._ducked:
@@ -219,15 +223,19 @@ class BrowserVoicePipeline:
                     logger.info("Rejected Silero STARTED: STT heard assistant echo.")
                     self._user_speech_active = False
                     self._possible_speech_active = False
+                    if self._tts_active and self._response_active:
+                        self._tts_barge_in_armed = True
                     self.speech_detector.rearm()
                     await self._unduck()
                     return
                 if evidence == "user":
+                    self._user_speech_active = True
                     await self._duck()
                     await self._confirm_barge_in("Silero STARTED + non-echo transcript")
                     return
                 if time.monotonic() >= deadline:
                     # Sustained strict-threshold speech and no sign of echo.
+                    self._user_speech_active = True
                     await self._duck()
                     await self._confirm_barge_in("Silero STARTED, no echo evidence")
                     return
@@ -575,7 +583,12 @@ class BrowserVoicePipeline:
                 continue
 
             if event.state == SpeechState.STARTED:
-                self._user_speech_active = True
+                # While the assistant speaks, a VAD hit is only a *candidate*
+                # (it may be echo). Marking it as user speech here used to
+                # disarm barge-in for the next sentence and, after a rejected
+                # candidate, for the rest of the response.
+                if not (self._tts_active and self._tts_barge_in_armed):
+                    self._user_speech_active = True
 
                 # Treat the original user utterance normally. During a live
                 # assistant response, however, keep barge-in armed across
@@ -635,6 +648,15 @@ class BrowserVoicePipeline:
                 return
             half = len(audio) // 2
             audio = self._browser_aec.process(audio[:half], audio[half:])
+            now = time.monotonic()
+            if self._tts_active and now - self._aec_log_at > 3.0:
+                self._aec_log_at = now
+                mic_in, mic_out, ref = self._browser_aec.pop_levels()
+                logger.info(
+                    "AEC levels while assistant speaks: mic_in=%.0f mic_out=%.0f ref=%.0f"
+                    " (mic_out << mic_in while you talk = AEC is suppressing you)",
+                    mic_in, mic_out, ref,
+                )
             if not audio:
                 return
         await self.audio_input_queue.put(audio)
