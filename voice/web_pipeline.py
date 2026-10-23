@@ -8,12 +8,25 @@ Deepgram + Silero VAD + Edge-TTS + barge-in behaviour.
 from __future__ import annotations
 
 import asyncio
+from collections import deque
 import json
 import time
 
-from config.constants import DROPPED_VOL, MAX_QUEUE_SIZE
+from config.constants import (
+    BARGE_IN_VERIFY_WINDOW_SECONDS,
+    BROWSER_BARGE_IN_GRACE_SECONDS,
+    DROPPED_VOL,
+    ECHO_EVIDENCE_LOOKBACK_SECONDS,
+    ECHO_GUARD_TAIL_SECONDS,
+    INTERIM_BARGE_IN_CONFIRMATIONS,
+    INTERIM_STRONG_NOVEL_WORDS,
+    MAX_QUEUE_SIZE,
+)
+from config.settings import settings
 from config.logger import logger
 from finance_agent.conversation import ConversationIdentity
+from voice.audio.browser_aec import create_browser_echo_processor
+from voice.audio.echo_guard import EchoGuard
 from voice.llm.worker import LLMWorker
 from voice.stt.deepgram import DeepgramClient
 from voice.stt.worker import STTWorker
@@ -62,6 +75,7 @@ class BrowserVoicePipeline:
             audio_queue=self.stt_audio_queue,
             transcript_queue=self.transcript_queue,
             on_transcript=self._on_transcript,
+            should_forward=self._should_forward_transcript,
         )
 
         self.silero_vad = SileroVAD()
@@ -81,6 +95,7 @@ class BrowserVoicePipeline:
             on_audio_started=self._on_tts_started,
             on_audio_finished=self._on_tts_finished,
             on_error=self._on_tts_error,
+            on_sentence=self._on_tts_sentence,
         )
 
         self.sentence_splitter = SentenceSplitter(
@@ -119,6 +134,129 @@ class BrowserVoicePipeline:
         self._browser_playback_drained = asyncio.Event()
         self._server_tts_drained = False
 
+        # Echo defence: what the assistant is saying, and when it last was.
+        self.echo_guard = EchoGuard()
+        self._echo_tail_until = 0.0
+        # Recent STT interims: (time, text, is_echo, novel_words).
+        self._recent_interims: deque = deque(maxlen=16)
+        self._ducked = False
+        self._soft_duck_stamp = 0.0
+        self._verify_task: asyncio.Task | None = None
+        self._interim_candidates = 0
+        self._interim_candidate_time = 0.0
+
+        # Server-side AEC fed by a sample-aligned reference from the browser.
+        self._browser_aec = None
+        self._audio_mode = "mic"
+        self._bad_packet_logged = False
+
+    # ------------------------------------------------------------------
+    # Echo helpers
+    # ------------------------------------------------------------------
+
+    def _on_tts_sentence(self, text: str) -> None:
+        self.echo_guard.note_spoken(text)
+
+    def _set_assistant_speaking(self, speaking: bool) -> None:
+        self.speech_detector.set_strict(speaking)
+        if not speaking:
+            self._echo_tail_until = time.monotonic() + ECHO_GUARD_TAIL_SECONDS
+
+    def _interim_evidence(self, since: float) -> str:
+        """What recent STT says about a VAD candidate: 'echo', 'user' or
+        'unknown' (no interim yet). The latest interim decides."""
+        latest = None
+        for item in self._recent_interims:
+            if item[0] >= since:
+                latest = item
+        if latest is None:
+            return "unknown"
+        _, _, is_echo, novel = latest
+        return "echo" if is_echo or novel == 0 else "user"
+
+    async def _duck(self) -> None:
+        if not self._ducked:
+            self._ducked = True
+            await self._queue_event({"type": "duck", "level": DROPPED_VOL})
+
+    async def _soft_duck(self, hold: float = 1.0) -> None:
+        """Duck on a single non-echo interim, and restore if nothing follows."""
+        await self._duck()
+        self._soft_duck_stamp = stamp = time.monotonic()
+
+        async def expire() -> None:
+            await asyncio.sleep(hold)
+            if (
+                self._soft_duck_stamp == stamp
+                and not self._barge_in_in_progress
+                and not self._user_speech_active
+                and not self._possible_speech_active
+            ):
+                await self._unduck()
+
+        asyncio.create_task(expire())
+
+    async def _unduck(self) -> None:
+        if self._ducked:
+            self._ducked = False
+            await self._queue_event({"type": "unduck"})
+
+    def _cancel_verify(self) -> None:
+        if self._verify_task is not None and not self._verify_task.done():
+            self._verify_task.cancel()
+        self._verify_task = None
+
+    async def _verify_then_barge_in(self, started_at: float) -> None:
+        """Give STT a short window to say whether a Silero hit is echo."""
+        since = started_at - ECHO_EVIDENCE_LOOKBACK_SECONDS
+        deadline = time.monotonic() + BARGE_IN_VERIFY_WINDOW_SECONDS
+        try:
+            while True:
+                if not self._tts_active or self._barge_in_in_progress:
+                    return
+                evidence = self._interim_evidence(since)
+                if evidence == "echo":
+                    logger.info("Rejected Silero STARTED: STT heard assistant echo.")
+                    self._user_speech_active = False
+                    self._possible_speech_active = False
+                    self.speech_detector.rearm()
+                    await self._unduck()
+                    return
+                if evidence == "user":
+                    await self._duck()
+                    await self._confirm_barge_in("Silero STARTED + non-echo transcript")
+                    return
+                if time.monotonic() >= deadline:
+                    # Sustained strict-threshold speech and no sign of echo.
+                    await self._duck()
+                    await self._confirm_barge_in("Silero STARTED, no echo evidence")
+                    return
+                await asyncio.sleep(0.02)
+        except asyncio.CancelledError:
+            pass
+
+    def _echo_window_open(self) -> bool:
+        return self._tts_active or time.monotonic() < self._echo_tail_until
+
+    def _should_forward_transcript(self, event) -> bool:
+        # Never let the assistant's own voice become a user turn.
+        if event.is_final and self._echo_window_open():
+            if self.echo_guard.is_echo(event.text):
+                logger.info("Dropping echo transcript from assistant audio: %r", event.text)
+                return False
+        return True
+
+    async def configure_audio(self, payload: dict) -> None:
+        if payload.get("mode") != "mic_ref" or self._browser_aec is None:
+            return
+        applied = self._browser_aec.set_delay_ms(payload.get("delay_ms"))
+        self._audio_mode = "mic_ref"
+        logger.info(
+            "Browser server-side AEC enabled: delay=%dms browser_aec=%s",
+            applied,
+            payload.get("browser_aec"),
+        )
+
     async def _on_transcript(self, event) -> None:
         # Only non-final Deepgram hypotheses are preview text. Final text
         # is emitted through the existing user_text callback after turn
@@ -127,6 +265,15 @@ class BrowserVoicePipeline:
             return
 
         text = event.text.strip()
+        now = time.monotonic()
+        is_echo = self._echo_window_open() and self.echo_guard.is_echo(text)
+        novel = self.echo_guard.novel_count(text) if self._echo_window_open() else len(text.split())
+        self._recent_interims.append((now, text, is_echo, novel))
+        if is_echo:
+            # The assistant heard itself: do not show it or act on it.
+            logger.debug("Ignoring echo interim: %r", text)
+            return
+
         await self._queue_event({"type": "interim_text", "text": text})
 
         # Browser AEC/noise suppression can make Silero's confirmed STARTED
@@ -143,6 +290,22 @@ class BrowserVoicePipeline:
             and time.monotonic() >= self._tts_interrupt_ready_at
             and len(text) >= 3
         ):
+            # No VAD bypass: a Silero candidate may itself be echo, so only
+            # text that is NOT the assistant's own words counts. Strong
+            # evidence (>= N novel words) interrupts at once; otherwise a
+            # second consecutive non-echo interim is needed, and the first
+            # only ducks softly.
+            if now - self._interim_candidate_time > 1.5:
+                self._interim_candidates = 0
+            self._interim_candidates += 1
+            self._interim_candidate_time = now
+            if (
+                novel < INTERIM_STRONG_NOVEL_WORDS
+                and self._interim_candidates < INTERIM_BARGE_IN_CONFIRMATIONS
+            ):
+                await self._soft_duck()
+                return
+
             # Deepgram interim confidence is not consistently populated
             # across deployments/models.  The presence of a substantive
             # interim hypothesis while TTS is active is already a strong
@@ -155,7 +318,7 @@ class BrowserVoicePipeline:
                 text,
                 confidence,
             )
-            await self._queue_event({"type": "duck", "level": DROPPED_VOL})
+            await self._duck()
             await self._confirm_barge_in("Deepgram interim transcript")
 
     async def _confirm_barge_in(self, reason: str) -> None:
@@ -165,6 +328,8 @@ class BrowserVoicePipeline:
             return
 
         self._barge_in_in_progress = True
+        self._interim_candidates = 0
+        self._set_assistant_speaking(False)
         logger.info("Browser barge-in confirmed: %s", reason)
 
         # Cut browser playback FIRST. The old implementation waited for
@@ -206,6 +371,7 @@ class BrowserVoicePipeline:
         # LLM response has finished and all TTS audio has drained.
         self._response_active = True
         self._response_generation_done = False
+        self.echo_guard.clear()
         await self._queue_event({"type": "user_text", "text": text})
 
     async def _on_assistant_text(self, text: str) -> None:
@@ -229,7 +395,8 @@ class BrowserVoicePipeline:
         await self._cancel_tts_idle_check()
         self._tts_active = True
         self._barge_in_in_progress = False
-        self._tts_interrupt_ready_at = time.monotonic() + 0.35
+        self._tts_interrupt_ready_at = time.monotonic() + BROWSER_BARGE_IN_GRACE_SECONDS
+        self._set_assistant_speaking(True)
         self._browser_playback_drained.clear()
         self._server_tts_drained = False
         # Arm barge-in only for a response that follows the initial user turn.
@@ -275,6 +442,7 @@ class BrowserVoicePipeline:
                         self._tts_barge_in_armed = False
                         self._barge_in_in_progress = False
                         self._response_active = False
+                        self._set_assistant_speaking(False)
                         await self._queue_event({"type": "tts_finished"})
                         logger.info(
                             "Browser TTS fully drained on client; barge-in disarmed."
@@ -317,6 +485,7 @@ class BrowserVoicePipeline:
 
     async def _on_tts_error(self, message: str) -> None:
         await self._cancel_tts_idle_check()
+        self._set_assistant_speaking(False)
         self._tts_active = False
         self._tts_interrupt_ready_at = 0.0
         self._tts_barge_in_armed = False
@@ -333,6 +502,9 @@ class BrowserVoicePipeline:
     async def start(self) -> None:
         if self._started:
             raise RuntimeError("Browser voice pipeline already started.")
+
+        if settings.BROWSER_SERVER_AEC and not settings.DISABLE_AEC:
+            self._browser_aec = create_browser_echo_processor()
 
         await self.llm_worker.start()
         self.stt_worker.start()
@@ -352,6 +524,7 @@ class BrowserVoicePipeline:
                 "audio_format": "pcm_s16le",
                 "channels": 1,
                 "barge_in": True,
+                "server_aec": self._browser_aec is not None,
             }
         )
 
@@ -381,17 +554,24 @@ class BrowserVoicePipeline:
 
             if event.state == SpeechState.POSSIBLE_STARTED:
                 self._possible_speech_active = True
-                await self._queue_event({
-                    "type": "duck",
-                    "level": DROPPED_VOL,
-                })
+                if self._tts_active:
+                    # Our own voice may be the "speaker": do not duck on the
+                    # VAD alone. Duck only if STT already shows non-echo text;
+                    # otherwise a later interim or STARTED validation decides.
+                    if self._interim_evidence(
+                        time.monotonic() - ECHO_EVIDENCE_LOOKBACK_SECONDS
+                    ) == "user":
+                        await self._duck()
+                        await self._queue_event({"type": "speech_detected"})
+                    continue
+                await self._duck()
                 await self._queue_event({"type": "speech_detected"})
                 continue
 
             if event.state == SpeechState.POSSIBLE_ENDED:
                 # Candidate speech faded before confirmation; restore volume.
                 self._possible_speech_active = False
-                await self._queue_event({"type": "unduck"})
+                await self._unduck()
                 continue
 
             if event.state == SpeechState.STARTED:
@@ -415,15 +595,16 @@ class BrowserVoicePipeline:
                     )
                     continue
 
-                # Re-send duck at confirmed speech so the browser is
-                # guaranteed to lower output even if the early candidate
-                # event was missed or arrived before TTS became active.
-                await self._queue_event({"type": "duck", "level": DROPPED_VOL})
-                await self._confirm_barge_in("Silero STARTED event")
-                # Keep browser output ducked until ENDED.
+                # Do not stop TTS on the VAD alone: it may be hearing the
+                # assistant. Verify against STT for a short window first.
+                if self._verify_task is None or self._verify_task.done():
+                    self._verify_task = asyncio.create_task(
+                        self._verify_then_barge_in(time.monotonic())
+                    )
                 continue
 
             if event.state == SpeechState.ENDED:
+                self._cancel_verify()
                 self._user_speech_active = False
                 self._possible_speech_active = False
                 self._barge_in_in_progress = False
@@ -433,7 +614,7 @@ class BrowserVoicePipeline:
                 if self._tts_active and self._response_active:
                     self._tts_barge_in_armed = True
                     logger.debug("Browser barge-in armed after user turn ended.")
-                await self._queue_event({"type": "unduck"})
+                await self._unduck()
                 asyncio.create_task(self._finalize_watchdog())
 
     async def _finalize_watchdog(self) -> None:
@@ -446,6 +627,16 @@ class BrowserVoicePipeline:
         if self._closed:
             return
         self._received_audio_bytes += len(audio)
+        if self._audio_mode == "mic_ref" and self._browser_aec is not None:
+            if len(audio) % 4 != 0:
+                if not self._bad_packet_logged:
+                    logger.warning("Malformed mic+reference packet (%d bytes).", len(audio))
+                    self._bad_packet_logged = True
+                return
+            half = len(audio) // 2
+            audio = self._browser_aec.process(audio[:half], audio[half:])
+            if not audio:
+                return
         await self.audio_input_queue.put(audio)
 
     async def next_outbound(self) -> tuple[str, object]:
@@ -582,6 +773,8 @@ async def run_browser_voice_session(
             message_type = payload.get("type")
             if message_type == "ping":
                 await pipeline._queue_event({"type": "pong"})
+            elif message_type == "audio_config":
+                await pipeline.configure_audio(payload)
             elif message_type == "tts_playback_drained":
                 await pipeline.notify_browser_playback_drained()
             elif message_type == "stop":
