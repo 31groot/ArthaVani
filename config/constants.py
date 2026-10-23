@@ -105,3 +105,41 @@ LOG_FORMAT = (
     "%(name)s | "
     "%(message)s"
 )
+
+
+# ---------------------------------------------------------------------------
+# Browser echo defence
+# ---------------------------------------------------------------------------
+
+# While the assistant is speaking, Silero is made harder to trigger so that
+# residual echo (which is clean synthetic speech) does not look like a user.
+STRICT_SPEECH_THRESHOLD = 0.75
+STRICT_POSSIBLE_SPEECH_DURATION_MS = 128
+STRICT_BARGE_IN_CONFIRMATION_DURATION_MS = 320
+
+# Grace period after a TTS sentence starts before barge-in may fire.
+BROWSER_BARGE_IN_GRACE_SECONDS = 0.6
+
+# Echo guard: how long spoken text stays "recent", how many of an interim
+# transcript's words may be novel before it is treated as real user speech,
+# and how long after TTS stops echo tails are still filtered.
+ECHO_GUARD_MAX_AGE_SECONDS = 45.0
+ECHO_GUARD_NOVEL_RATIO = 0.34
+ECHO_GUARD_TAIL_SECONDS = 2.0
+
+# Non-echo interim transcripts needed to interrupt (unless Silero agrees).
+INTERIM_BARGE_IN_CONFIRMATIONS = 2
+
+# Server-side AEC for browser audio (sample-aligned reference from the browser).
+BROWSER_AEC_TAIL_MS = 600
+BROWSER_AEC_DEFAULT_DELAY_MS = 100
+BROWSER_AEC_MIN_DELAY_MS = 20
+BROWSER_AEC_MAX_DELAY_MS = 500
+
+# Candidate validation (keep short so real interruptions stay responsive).
+# Silero STARTED must survive this window without echo evidence from STT.
+BARGE_IN_VERIFY_WINDOW_SECONDS = 0.25
+# An interim with this many novel (non-echo) content words interrupts at once.
+INTERIM_STRONG_NOVEL_WORDS = 2
+# How far back STT interims count as evidence for a VAD candidate.
+ECHO_EVIDENCE_LOOKBACK_SECONDS = 0.4

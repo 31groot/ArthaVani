@@ -17,6 +17,8 @@ class Settings(BaseSettings):
     DEEPGRAM_MODEL: str = "nova-3"
 
     DISABLE_AEC: bool = False
+    # Run the WebRTC AEC on browser audio using a reference tapped in the browser.
+    BROWSER_SERVER_AEC: bool = True
     EDGE_TTS_VOICE: str = "en-GB-SoniaNeural"
     LOG_LEVEL: str = "info"
 
