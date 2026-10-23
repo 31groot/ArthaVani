@@ -2,6 +2,10 @@ import { useEffect, useRef, useState } from "react";
 import { ArrowRight, Bot, Mic, MicOff } from "lucide-react";
 import { chat, getToken, voiceSocketUrl } from "../api";
 
+// Set VITE_BROWSER_AEC=off to disable the browser canceller and let only the
+// server-side WebRTC AEC (same engine as the desktop app) handle echo.
+const BROWSER_AEC = import.meta.env.VITE_BROWSER_AEC !== "off";
+
 function AssistantCard() {
   const [messages, setMessages] = useState([
     {
@@ -190,6 +194,7 @@ function AssistantCard() {
     let playbackNode;
     let keepAliveGain;
     let captureReady = false;
+    let serverAec = false;
 
     try {
       // Start audio output from the actual button gesture before awaiting
@@ -201,7 +206,7 @@ function AssistantCard() {
       stream = await navigator.mediaDevices.getUserMedia({
         audio: {
           channelCount: 1,
-          echoCancellation: true,
+          echoCancellation: BROWSER_AEC,
           noiseSuppression: true,
           autoGainControl: false,
         },
@@ -359,6 +364,7 @@ function AssistantCard() {
           let message;
           try { message = JSON.parse(event.data); } catch { return; }
           if (message.type === "ready") {
+            serverAec = Boolean(message.server_aec);
             clearTimeout(timer);
             socket.removeEventListener("message", handler);
             resolve();
@@ -372,8 +378,14 @@ function AssistantCard() {
       });
 
       const source = audioContext.createMediaStreamSource(stream);
+      // Input 0 = microphone, input 1 = playback reference (AEC far end).
       captureNode = new AudioWorkletNode(audioContext, "pcm16-capture", {
-        processorOptions: { targetSampleRate: 16000 },
+        numberOfInputs: 2,
+        numberOfOutputs: 1,
+        outputChannelCount: [1],
+        channelCount: 1,
+        channelCountMode: "explicit",
+        processorOptions: { targetSampleRate: 16000, sendReference: serverAec },
       });
       keepAliveGain = audioContext.createGain();
       keepAliveGain.gain.value = 0;
@@ -396,11 +408,32 @@ function AssistantCard() {
         }
       };
 
-      source.connect(captureNode);
+      source.connect(captureNode, 0, 0);
       captureNode.connect(keepAliveGain);
       keepAliveGain.connect(audioContext.destination);
       playbackNode.connect(playbackGain);
       playbackGain.connect(audioContext.destination);
+      // Tap AFTER the ducking gain so the reference equals what is played.
+      playbackGain.connect(captureNode, 0, 1);
+
+      const track = stream.getAudioTracks()[0];
+      const trackSettings = track?.getSettings?.() || {};
+      console.info("[voice] mic settings", trackSettings, "serverAec:", serverAec);
+      if (serverAec) {
+        const latencyMs =
+          1000 *
+          ((audioContext.outputLatency || 0) +
+            (audioContext.baseLatency || 0) +
+            (trackSettings.latency || 0));
+        socket.send(
+          JSON.stringify({
+            type: "audio_config",
+            mode: "mic_ref",
+            delay_ms: latencyMs > 0 ? Math.round(latencyMs) + 10 : null,
+            browser_aec: trackSettings.echoCancellation === true,
+          })
+        );
+      }
 
       captureNode.port.onmessage = (event) => {
         if (captureReady && socket.readyState === WebSocket.OPEN) {
