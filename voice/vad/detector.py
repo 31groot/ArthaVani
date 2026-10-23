@@ -5,6 +5,9 @@ from config.constants import (
     POSSIBLE_SILENCE_DURATION_MS,
     SPEECH_THRESHOLD,
     FRAME_DURATION_MS,
+    STRICT_SPEECH_THRESHOLD,
+    STRICT_POSSIBLE_SPEECH_DURATION_MS,
+    STRICT_BARGE_IN_CONFIRMATION_DURATION_MS,
 )
 
 from voice.vad.events import (
@@ -32,12 +35,37 @@ class SpeechDetector:
         # Early speech candidate used for fast ducking.
         self._possible_active = False
 
+        # Stricter thresholds used while the assistant is speaking, so
+        # residual echo is less likely to look like the user.
+        self._strict = False
+
+    def set_strict(self, strict: bool) -> None:
+        self._strict = bool(strict)
+
+    def rearm(self) -> None:
+        """Forget the current speech candidate/turn (used after a VAD hit is
+        judged to be echo) so a later genuine start can still fire."""
+        self._speaking = False
+        self._possible_active = False
+        self._speech_frames = 0
+        self._silence_frames = 0
+
     def update(
         self,
         probability,
     ) -> ConversationEvent | None:
 
-        if probability >= self.threshold:
+        threshold = STRICT_SPEECH_THRESHOLD if self._strict else self.threshold
+        possible_ms = (
+            STRICT_POSSIBLE_SPEECH_DURATION_MS if self._strict
+            else POSSIBLE_SPEECH_DURATION_MS
+        )
+        confirm_ms = (
+            STRICT_BARGE_IN_CONFIRMATION_DURATION_MS if self._strict
+            else BARGE_IN_CONFIRMATION_DURATION_MS
+        )
+
+        if probability >= threshold:
 
             self._speech_frames += 1
             self._silence_frames = 0
@@ -54,7 +82,7 @@ class SpeechDetector:
             # Early signal: duck the speaker quickly.
             if (
                 not self._possible_active
-                and speech_ms >= POSSIBLE_SPEECH_DURATION_MS
+                and speech_ms >= possible_ms
             ):
                 self._possible_active = True
 
@@ -65,7 +93,7 @@ class SpeechDetector:
             # Full confirmation: now perform real barge-in.
             if (
                 self._possible_active
-                and speech_ms >= BARGE_IN_CONFIRMATION_DURATION_MS
+                and speech_ms >= confirm_ms
             ):
                 self._speaking = True
                 self._possible_active = False
